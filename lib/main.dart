@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'dart:ui';
+
+// Windows-specific imports
+import 'package:window_manager/window_manager.dart' if (dart.library.io) 'package:window_manager/window_manager.dart';
+import 'package:media_kit/media_kit.dart';
+
 import 'providers/anime_provider.dart';
 import 'providers/player_provider.dart';
 import 'screens/splash_screen.dart';
@@ -10,8 +16,52 @@ import 'screens/home_screen.dart';
 import 'screens/all_anime_screen.dart';
 import 'screens/genre_screen.dart';
 import 'screens/player_screen.dart';
+import 'utils/platform_utils.dart';
 
-void main() {
+void main() async {
+  // ✅ Ensure Flutter binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // ✅ Initialize MediaKit for video playback
+  MediaKit.ensureInitialized();
+  
+  // ✅ Initialize window manager for Windows
+  if (PlatformUtils.isWindows) {
+    await windowManager.ensureInitialized();
+    
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1200, 800),
+      minimumSize: Size(800, 600),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+    
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+  
+  // ✅ Set preferred orientations
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  
+  // ✅ Set system UI overlay style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+  
   runApp(const MyApp());
 }
 

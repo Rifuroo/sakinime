@@ -4,14 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/anime_model.dart';
 import '../services/zoro_service.dart';
+import '../services/subtitle_parser_service.dart';
 import 'anime_webview_player.dart';
 import 'dart:async';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 class AnimeVideoPlayer extends StatefulWidget {
   final Episode episodeToLoad;
@@ -32,12 +34,18 @@ class AnimeVideoPlayer extends StatefulWidget {
 }
 
 class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBindingObserver {
+  // MediaKit - Primary player for Windows
+  Player? _mediaKitPlayer;
+  VideoController? _mediaKitVideoController;
+  bool _useMediaKit = false;
+  
+  // Fallback video player (kept for compatibility)
   VideoPlayerController? _videoController;
-  ChewieController? _chewieController;
+  
   StreamLink? _currentStreamLink;
   List<StreamLink> _allAvailableQualities = [];
   Episode? _currentEpisode;
-  List<Subtitle> _subtitles = []; // ✅ Parsed subtitles
+  List<ParsedSubtitle> _subtitles = []; // ✅ Parsed subtitles
   String _currentSubtitle = ''; // ✅ Current subtitle text to display
   List<Map<String, String>> _availableSubtitles = []; // ✅ Available subtitle languages
   String _selectedSubtitleLang = 'English'; // ✅ Selected subtitle language
@@ -113,10 +121,27 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   void _startHideTimer() {
     _hideControlsTimer?.cancel();
-    if (_videoController?.value.isPlaying == true) {
+    
+    bool isPlaying = false;
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      isPlaying = _mediaKitPlayer!.state.playing;
+    } else if (_videoController != null) {
+      isPlaying = _videoController!.value.isPlaying;
+    }
+    
+    if (isPlaying) {
       _hideControlsTimer = Timer(const Duration(seconds: 3), () {
-        if (mounted && _showControls && _videoController?.value.isPlaying == true) {
-          setState(() => _showControls = false);
+        if (mounted && _showControls) {
+          bool stillPlaying = false;
+          if (_useMediaKit && _mediaKitPlayer != null) {
+            stillPlaying = _mediaKitPlayer!.state.playing;
+          } else if (_videoController != null) {
+            stillPlaying = _videoController!.value.isPlaying;
+          }
+          
+          if (stillPlaying) {
+            setState(() => _showControls = false);
+          }
         }
       });
     }
@@ -322,7 +347,12 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           _startSubtitleTimer();
         }
         
-        if (kDebugMode) print('✅ Loaded $lang: ${parsed.length} entries');
+        if (kDebugMode) {
+          print('✅ Loaded $lang: ${parsed.length} entries');
+          if (parsed.isNotEmpty) {
+            print('   First subtitle: "${parsed.first.text}" at ${parsed.first.start}');
+          }
+        }
       }
     } catch (e) {
       if (kDebugMode) print('❌ Subtitle load error: $e');
@@ -330,7 +360,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   }
 
   // FETCH AND PARSE VTT SUBTITLE FILE
-  Future<List<Subtitle>> _fetchAndParseVTT(String url) async {
+  Future<List<ParsedSubtitle>> _fetchAndParseVTT(String url) async {
     try {
       final response = await http.get(Uri.parse(url));
       
@@ -338,102 +368,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         return [];
       }
       
-      final content = response.body;
-      final lines = content.split('\n');
-      final List<Subtitle> subtitles = [];
-      
-      int i = 0;
-      while (i < lines.length) {
-        final line = lines[i].trim();
-        
-        // Skip WEBVTT header and empty lines
-        if (line.isEmpty || line.startsWith('WEBVTT') || line.startsWith('NOTE')) {
-          i++;
-          continue;
-        }
-        
-        // Check if this is a timestamp line (e.g., "00:00:01.000 --> 00:00:03.000")
-        if (line.contains('-->')) {
-          final parts = line.split('-->');
-          if (parts.length == 2) {
-            final start = _parseVTTTimestamp(parts[0].trim());
-            final end = _parseVTTTimestamp(parts[1].trim());
-            
-            // Get subtitle text (next lines until empty line)
-            i++;
-            final textLines = <String>[];
-            while (i < lines.length && lines[i].trim().isNotEmpty) {
-              textLines.add(lines[i].trim());
-              i++;
-            }
-            
-            if (textLines.isNotEmpty && start != null && end != null) {
-              final rawText = textLines.join('\n');
-              final cleanText = _stripHtmlTags(rawText); // ✅ Remove HTML tags
-              
-              subtitles.add(Subtitle(
-                index: subtitles.length,
-                start: start,
-                end: end,
-                text: cleanText,
-              ));
-            }
-          }
-        }
-        i++;
-      }
-      
-      return subtitles;
+      // Use the subtitle parser service
+      return SubtitleParserService.parseSubtitles(response.body, language: 'English');
     } catch (e) {
       if (kDebugMode) print('VTT parse error: $e');
       return [];
     }
   }
 
-  // STRIP HTML TAGS FROM SUBTITLE TEXT
-  String _stripHtmlTags(String text) {
-    // Remove common VTT HTML tags: <i>, <b>, <u>, <font>, etc.
-    return text
-        .replaceAll(RegExp(r'<[^>]*>'), '') // Remove all HTML tags
-        .replaceAll('&nbsp;', ' ')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .trim();
-  }
 
-  // PARSE VTT TIMESTAMP (e.g., "00:00:01.000")
-  Duration? _parseVTTTimestamp(String timestamp) {
-    try {
-      final parts = timestamp.split(':');
-      if (parts.length < 2) return null;
-      
-      int hours = 0;
-      int minutes = 0;
-      double seconds = 0;
-      
-      if (parts.length == 3) {
-        // HH:MM:SS.mmm
-        hours = int.parse(parts[0]);
-        minutes = int.parse(parts[1]);
-        seconds = double.parse(parts[2]);
-      } else {
-        // MM:SS.mmm
-        minutes = int.parse(parts[0]);
-        seconds = double.parse(parts[1]);
-      }
-      
-      return Duration(
-        hours: hours,
-        minutes: minutes,
-        seconds: seconds.floor(),
-        milliseconds: ((seconds - seconds.floor()) * 1000).round(),
-      );
-    } catch (e) {
-      return null;
-    }
-  }
 
   // FILTER UNIQUE QUALITIES (360p, 480p, 720p, 1080p only)
   List<StreamLink> _filterUniqueQualities(List<StreamLink> links) {
@@ -532,41 +475,155 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         print('   Quality: ${_currentStreamLink!.quality}');
       }
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(_currentStreamLink!.url),
-        httpHeaders: _getHttpHeaders(_currentStreamLink!.url),
-      );
+      // Windows-specific multi-fallback approach
+      bool initialized = false;
+      Exception? lastError;
       
-      await _videoController!.initialize();
+      // Strategy 1: MediaKit (Primary for Windows)
+      if (!initialized && defaultTargetPlatform == TargetPlatform.windows) {
+        try {
+          if (kDebugMode) {
+            print('🔄 Strategy 1: MediaKit (Windows Primary)');
+            print('   URL: ${_currentStreamLink!.url.length > 100 ? '${_currentStreamLink!.url.substring(0, 100)}...' : _currentStreamLink!.url}');
+          }
+          
+          _mediaKitPlayer = Player();
+          _mediaKitVideoController = VideoController(_mediaKitPlayer!);
+          
+          await _mediaKitPlayer!.open(Media(_currentStreamLink!.url));
+          
+          // Setup MediaKit position listener for subtitles
+          _mediaKitPlayer!.stream.position.listen((position) {
+            if (mounted && _subtitles.isNotEmpty) {
+              _updateSubtitleForMediaKit(position);
+            }
+          });
+          
+          // Wait a bit for MediaKit to initialize
+          await Future.delayed(const Duration(seconds: 2));
+          
+          _useMediaKit = true;
+          initialized = true;
+          if (kDebugMode) print('✅ Strategy 1 successful with MediaKit');
+          
+        } catch (e) {
+          lastError = e is Exception ? e : Exception(e.toString());
+          if (kDebugMode) print('❌ Strategy 1 (MediaKit) failed: $e');
+          _mediaKitPlayer?.dispose();
+          _mediaKitVideoController = null;
+        }
+      }
       
-      // ✅ Optimized listener: only update on important state changes
-      _videoController!.addListener(_onVideoStateChanged);
-
-      _chewieController = ChewieController(
-        videoPlayerController: _videoController!,
-        aspectRatio: 16 / 9,
-        autoPlay: true,
-        looping: false,
-        allowFullScreen: false,
-        allowMuting: true,
-        showControls: false,
-        // ✅ Performance optimizations - disable unused features
-        allowPlaybackSpeedChanging: false,
-        // ✅ Reduce UI rebuilds
-        materialProgressColors: ChewieProgressColors(
-          playedColor: const Color(0xFF6366F1),
-          handleColor: const Color(0xFF6366F1),
-          backgroundColor: Colors.white24,
-          bufferedColor: const Color(0xFF6366F1).withOpacity(0.3),
-        ),
-        placeholder: Container(
-          color: Colors.black,
-          child: const Center(
-            child: CircularProgressIndicator(color: Color(0xFF6366F1)),
-          ),
-        ),
-        errorBuilder: (context, errorMessage) => _buildErrorWidget(),
-      );
+      // Strategy 2: VideoPlayer fallback (minimal headers)
+      if (!initialized) {
+        try {
+          if (kDebugMode) print('🔄 Strategy 2: VideoPlayer fallback');
+          _videoController = VideoPlayerController.networkUrl(
+            Uri.parse(_currentStreamLink!.url),
+            httpHeaders: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+              'Accept': '*/*',
+            },
+          );
+          
+          await _videoController!.initialize().timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception('Timeout'),
+          );
+          
+          initialized = true;
+          if (kDebugMode) print('✅ Strategy 2 successful');
+          
+        } catch (e) {
+          lastError = e is Exception ? e : Exception(e.toString());
+          if (kDebugMode) print('❌ Strategy 2 failed: $e');
+          _videoController?.dispose();
+        }
+      }
+      
+      // Strategy 3: Try different quality if available
+      if (!initialized && _allAvailableQualities.length > 1) {
+        for (var quality in _allAvailableQualities) {
+          if (quality.url != _currentStreamLink!.url) {
+            // Try with MediaKit first on Windows
+            if (defaultTargetPlatform == TargetPlatform.windows) {
+              try {
+                if (kDebugMode) print('🔄 Strategy 3a: Different quality with MediaKit (${quality.quality})');
+                
+                _mediaKitPlayer = Player();
+                _mediaKitVideoController = VideoController(_mediaKitPlayer!);
+                
+                await _mediaKitPlayer!.open(Media(quality.url));
+                
+                // Setup subtitle listener
+                _mediaKitPlayer!.stream.position.listen((position) {
+                  if (mounted && _subtitles.isNotEmpty) {
+                    _updateSubtitleForMediaKit(position);
+                  }
+                });
+                
+                await Future.delayed(const Duration(seconds: 2));
+                
+                // Update to working quality
+                setState(() {
+                  _currentStreamLink = quality;
+                });
+                
+                _useMediaKit = true;
+                initialized = true;
+                if (kDebugMode) print('✅ Strategy 3a successful with MediaKit ${quality.quality}');
+                break;
+                
+              } catch (e) {
+                if (kDebugMode) print('❌ Strategy 3a failed for ${quality.quality}: $e');
+                _mediaKitPlayer?.dispose();
+                _mediaKitVideoController = null;
+              }
+            }
+            
+            // Fallback to VideoPlayer
+            try {
+              if (kDebugMode) print('🔄 Strategy 3b: Different quality with VideoPlayer (${quality.quality})');
+              _videoController = VideoPlayerController.networkUrl(
+                Uri.parse(quality.url),
+              );
+              
+              await _videoController!.initialize().timeout(
+                const Duration(seconds: 15),
+                onTimeout: () => throw Exception('Timeout'),
+              );
+              
+              // Update to working quality
+              setState(() {
+                _currentStreamLink = quality;
+              });
+              
+              initialized = true;
+              if (kDebugMode) print('✅ Strategy 3b successful with ${quality.quality}');
+              break;
+              
+            } catch (e) {
+              lastError = e is Exception ? e : Exception(e.toString());
+              if (kDebugMode) print('❌ Strategy 3b failed for ${quality.quality}: $e');
+              _videoController?.dispose();
+            }
+          }
+        }
+      }
+      
+      if (!initialized) {
+        throw lastError ?? Exception('All initialization strategies failed');
+      }
+      
+      // Setup player controls based on which player is being used
+      if (!_useMediaKit && _videoController != null) {
+        // ✅ Optimized listener: only update on important state changes
+        _videoController!.addListener(_onVideoStateChanged);
+        if (kDebugMode) print('🎬 Using VideoPlayer fallback');
+      } else if (_useMediaKit && _mediaKitPlayer != null) {
+        // MediaKit is primary player for Windows
+        if (kDebugMode) print('🎬 Using MediaKit player for Windows');
+      }
       
       // ✅ Start subtitle timer if subtitles are available
       if (_subtitles.isNotEmpty) {
@@ -577,6 +634,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         setState(() {
           _isLoadingPlayer = false;
           _isPlayerInitialized = true;
+          _showControls = true; // Show controls when player is ready
         });
         _startHideTimer();
       }
@@ -585,11 +643,27 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       
     } catch (e) {
       if (kDebugMode) print('❌ Player error: $e');
+      
+      String errorMessage = e.toString();
+      
+      // Provide more helpful error messages for Windows
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        if (errorMessage.contains('12029')) {
+          errorMessage = 'Windows Network Error (12029)\n\nThis is a known Windows compatibility issue with certain streaming servers.\n\nSolutions:\n• Try different video quality from the quality menu\n• Try a different episode\n• Check your internet connection\n• Some streaming sources work better than others on Windows';
+        } else if (errorMessage.contains('file not found') || errorMessage.contains('corrupted')) {
+          errorMessage = 'Video Source Error\n\nThe video file is not accessible or corrupted.\n\nSolutions:\n• Try different video quality\n• Try different episode\n• Try again later';
+        } else if (errorMessage.contains('timeout') || errorMessage.contains('Timeout')) {
+          errorMessage = 'Connection Timeout\n\nVideo loading took too long.\n\nSolutions:\n• Try different video quality\n• Check internet connection\n• Try again later';
+        } else if (errorMessage.contains('All initialization strategies failed')) {
+          errorMessage = 'All Video Players Failed\n\nMultiple video loading methods were attempted but all failed.\n\nSolutions:\n• Try different episode\n• Check internet connection\n• Restart the app\n• Try again later';
+        }
+      }
+      
       if (mounted) {
         setState(() {
           _isLoadingPlayer = false;
           _hasError = true;
-          _errorMessage = e.toString();
+          _errorMessage = errorMessage;
         });
         _disableWakelock();
       }
@@ -603,9 +677,63 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     return isDesu;
   }
 
+  // Build MediaKit video player with subtitle overlay
+  Widget _buildVideoPlayer() {
+    if (_useMediaKit && _mediaKitVideoController != null) {
+      // MediaKit Video WITHOUT native controls
+      return Video(
+        controller: _mediaKitVideoController!,
+        controls: NoVideoControls, // Disable native controls
+      );
+    } else if (_videoController != null) {
+      // Fallback to basic VideoPlayer
+      return AspectRatio(
+        aspectRatio: _videoController!.value.aspectRatio == 0 
+            ? 16 / 9 
+            : _videoController!.value.aspectRatio,
+        child: VideoPlayer(_videoController!),
+      );
+    } else {
+      // Loading state
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+        ),
+      );
+    }
+  }
+
+  // Update subtitle for MediaKit player
+  void _updateSubtitleForMediaKit(Duration position) {
+    try {
+      String newSubtitle = '';
+
+      // Find subtitle that matches current position
+      for (final sub in _subtitles) {
+        if (position >= sub.start && position <= sub.end) {
+          newSubtitle = sub.text;
+          break;
+        }
+      }
+
+      // Only update if subtitle changed (prevent unnecessary rebuilds)
+      if (newSubtitle != _currentSubtitle && mounted) {
+        if (kDebugMode && newSubtitle.isNotEmpty) {
+          print('📝 MediaKit subtitle: $newSubtitle');
+        }
+        setState(() {
+          _currentSubtitle = newSubtitle;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) print('⚠️ MediaKit subtitle update error: $e');
+    }
+  }
+
   // ✅ Optimized video state change handler
   void _onVideoStateChanged() {
-    if (!mounted || _videoController == null) return;
+    if (!mounted || _videoController == null || _useMediaKit) return;
     
     try {
       final isPlaying = _videoController!.value.isPlaying;
@@ -649,15 +777,27 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     if (kDebugMode) print('📝 Subtitle timer started (${_subtitles.length} subs)');
   }
 
-  // UPDATE CURRENT SUBTITLE BASED ON VIDEO POSITION
+  // UPDATE CURRENT SUBTITLE BASED ON VIDEO POSITION - Works for both players
   void _updateSubtitle() {
-    if (_videoController == null || !_videoController!.value.isInitialized) {
-      return;
-    }
+    // Skip if no player is initialized
+    if (_useMediaKit && _mediaKitPlayer == null) return;
+    if (!_useMediaKit && (_videoController == null || !_videoController!.value.isInitialized)) return;
 
     try {
+      Duration position = Duration.zero;
+      bool isPlaying = false;
+      
+      // Get position and playing state from appropriate player
+      if (_useMediaKit && _mediaKitPlayer != null) {
+        position = _mediaKitPlayer!.state.position;
+        isPlaying = _mediaKitPlayer!.state.playing;
+      } else if (_videoController != null) {
+        position = _videoController!.value.position;
+        isPlaying = _videoController!.value.isPlaying;
+      }
+
       // ✅ Skip update if video is paused (performance optimization)
-      if (!_videoController!.value.isPlaying) {
+      if (!isPlaying) {
         // Clear subtitle when paused
         if (_currentSubtitle.isNotEmpty && mounted) {
           setState(() {
@@ -668,7 +808,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         return;
       }
 
-      final position = _videoController!.value.position;
       String newSubtitle = '';
 
       // Find subtitle that matches current position
@@ -682,6 +821,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       // Only update if subtitle changed (prevent unnecessary rebuilds)
       if (newSubtitle != _previousSubtitle && mounted) {
         _previousSubtitle = newSubtitle;
+        if (kDebugMode && newSubtitle.isNotEmpty) {
+          print('📝 Timer subtitle: $newSubtitle');
+        }
         setState(() {
           _currentSubtitle = newSubtitle;
         });
@@ -750,8 +892,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     if (_videoController != null) {
       _videoController!.removeListener(_onVideoStateChanged);
     }
-    _chewieController?.pause();
-    _chewieController?.dispose();
     _videoController?.pause();
     _videoController?.dispose();
     
@@ -786,6 +926,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   void _playNextEpisode() {
     if (!hasNextEpisode) return;
+    if (kDebugMode) print('🎬 Playing next episode');
     final currentIndex = widget.allEpisodes.indexWhere((e) => e.url == _currentEpisode!.url);
     final nextEpisode = widget.allEpisodes[currentIndex + 1];
     _switchEpisode(nextEpisode);
@@ -793,6 +934,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   void _playPreviousEpisode() {
     if (!hasPreviousEpisode) return;
+    if (kDebugMode) print('🎬 Playing previous episode');
     final currentIndex = widget.allEpisodes.indexWhere((e) => e.url == _currentEpisode!.url);
     final prevEpisode = widget.allEpisodes[currentIndex - 1];
     _switchEpisode(prevEpisode);
@@ -801,18 +943,29 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _switchEpisode(Episode newEpisode) async {
     // ✅ Proper cleanup before switching episode
     _subtitleTimer?.cancel();
+    
+    // Clean up MediaKit
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      try {
+        _mediaKitPlayer?.dispose();
+        _mediaKitVideoController = null;
+      } catch (e) {
+        if (kDebugMode) print('⚠️ MediaKit cleanup error: $e');
+      }
+    }
+    
+    // Clean up VideoPlayer
     if (_videoController != null) {
       _videoController!.removeListener(_onVideoStateChanged);
+      _videoController?.pause();
+      _videoController?.dispose();
     }
-    _chewieController?.pause();
-    _chewieController?.dispose();
-    _videoController?.pause();
-    _videoController?.dispose();
     
     // Reset state tracking
     _previousIsPlaying = false;
     _previousPosition = Duration.zero;
     _previousSubtitle = '';
+    _useMediaKit = false;
     
     setState(() {
       _currentEpisode = newEpisode;
@@ -851,6 +1004,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   }
 
   void _showSubtitleBottomSheet() {
+    if (kDebugMode) print('📝 Subtitle button pressed');
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -872,11 +1026,27 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     _disableWakelock();
     WidgetsBinding.instance.removeObserver(this);
     
-    // ✅ Dispose controllers in proper order
-    _chewieController?.pause();
-    _chewieController?.dispose();
-    _videoController?.pause();
-    _videoController?.dispose();
+    // ✅ Dispose MediaKit if being used
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      try {
+        _mediaKitPlayer?.dispose();
+        _mediaKitVideoController = null;
+        if (kDebugMode) print('🧹 MediaKit disposed');
+      } catch (e) {
+        if (kDebugMode) print('⚠️ MediaKit dispose error: $e');
+      }
+    }
+    
+    // ✅ Dispose VideoPlayer if exists
+    if (_videoController != null) {
+      try {
+        _videoController?.pause();
+        _videoController?.dispose();
+        if (kDebugMode) print('🧹 VideoPlayer disposed');
+      } catch (e) {
+        if (kDebugMode) print('⚠️ VideoPlayer dispose error: $e');
+      }
+    }
     
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -940,17 +1110,18 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         onTap: _isPlayerInitialized && !_hasError && !_isLoadingEpisode && !_isLoadingPlayer ? _toggleControls : null,
         child: Stack(
           children: [
-            if (_isPlayerInitialized && !_hasError && !_isLoadingEpisode && _chewieController != null)
-              Center(child: Chewie(controller: _chewieController!)),
+            if (_isPlayerInitialized && !_hasError && !_isLoadingEpisode)
+              Center(child: _buildVideoPlayer()),
             if (_isLoadingEpisode || _isLoadingPlayer) _buildLoadingScreen(),
             if (_hasError) _buildErrorWidget(),
-            // ✅ Custom subtitle overlay
+            // ✅ Custom subtitle overlay - Show when there's subtitle text
             if (_isPlayerInitialized && _currentSubtitle.isNotEmpty)
               _buildSubtitleOverlay(),
+            // Show/hide controls based on _showControls
             if (_showControls && _isPlayerInitialized && !_isInPiP) _buildPortraitTopBar(),
-            if (_showControls && _isPlayerInitialized && !_isInPiP && _videoController != null)
+            if (_showControls && _isPlayerInitialized && !_isInPiP)
               _buildPortraitCenterControls(),
-            if (_showControls && _isPlayerInitialized && !_isInPiP && _videoController != null)
+            if (_showControls && _isPlayerInitialized && !_isInPiP)
               _buildPortraitBottomControls(),
           ],
         ),
@@ -963,58 +1134,69 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       onTap: _isPlayerInitialized && !_hasError && !_isLoadingEpisode && !_isLoadingPlayer ? _toggleControls : null,
       child: Stack(
         children: [
-          if (_isPlayerInitialized && !_hasError && !_isLoadingEpisode && _chewieController != null)
-            Center(child: Chewie(controller: _chewieController!)),
+          if (_isPlayerInitialized && !_hasError && !_isLoadingEpisode)
+            Center(child: _buildVideoPlayer()),
           if (_isLoadingEpisode || _isLoadingPlayer) _buildLoadingScreen(),
           if (_hasError) _buildErrorWidget(),
-          // Custom subtitle overlay
+          // Custom subtitle overlay - Show when there's subtitle text
           if (_isPlayerInitialized && _currentSubtitle.isNotEmpty)
             _buildSubtitleOverlay(),
+          // Show/hide controls based on _showControls
           if (_showControls && _isPlayerInitialized && !_isInPiP) _buildLandscapeTopBar(),
-          if (_showControls && _isPlayerInitialized && !_isInPiP && _videoController != null)
+          if (_showControls && _isPlayerInitialized && !_isInPiP)
             _buildLandscapeCenterControls(),
-          if (_showControls && _isPlayerInitialized && !_isInPiP && _videoController != null)
+          if (_showControls && _isPlayerInitialized && !_isInPiP)
             _buildLandscapeBottomControls(),
         ],
       ),
     );
   }
 
-  // SUBTITLE OVERLAY
+  // SUBTITLE OVERLAY - Fixed transparency and positioning
   Widget _buildSubtitleOverlay() {
-    // Check if landscape or portrait
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
     
     return Positioned(
       left: 0,
       right: 0,
-      bottom: isLandscape ? 15 : 10, // ✅ Lebih rendah, dekat bawah
+      bottom: isLandscape ? 120 : 80, // Higher position to avoid controls
       child: Center(
         child: Container(
-          constraints: BoxConstraints(maxWidth: isLandscape ? 700 : 500),
+          constraints: BoxConstraints(maxWidth: isLandscape ? 1000 : 400),
           margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.6), // ✅ Lebih transparan (60%)
-            borderRadius: BorderRadius.circular(4),
+            color: Colors.black.withOpacity(0.9), // Very visible
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
           ),
           child: Text(
             _currentSubtitle,
-            style: TextStyle(
+            style: GoogleFonts.inter(
               color: Colors.white,
-              fontSize: isLandscape ? 16 : 14, // ✅ Font lebih kecil
-              fontWeight: FontWeight.w500,
+              fontSize: isLandscape ? 22 : 18, // Larger font
+              fontWeight: FontWeight.w700,
               height: 1.3,
               shadows: const [
                 Shadow(
                   color: Colors.black,
-                  offset: Offset(1, 1),
-                  blurRadius: 3,
+                  offset: Offset(2, 2),
+                  blurRadius: 6,
                 ),
               ],
             ),
             textAlign: TextAlign.center,
-            maxLines: 2,
+            maxLines: 4,
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -1040,7 +1222,13 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         child: Row(
           children: [
             IconButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                if (kDebugMode) print('🔙 Back button pressed');
+                // Proper cleanup before navigation
+                _subtitleTimer?.cancel();
+                _hideControlsTimer?.cancel();
+                Navigator.of(context).pop();
+              },
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
@@ -1073,9 +1261,17 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     );
   }
 
-  // PORTRAIT CENTER CONTROLS
+  // PORTRAIT CENTER CONTROLS - Works for both MediaKit and VideoPlayer
   Widget _buildPortraitCenterControls() {
-    final isPlaying = _videoController!.value.isPlaying;
+    bool isPlaying = false;
+    
+    // Get playing state from appropriate player
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      isPlaying = _mediaKitPlayer!.state.playing;
+    } else if (_videoController != null) {
+      isPlaying = _videoController!.value.isPlaying;
+    }
+    
     return Center(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1102,9 +1298,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             ),
             child: IconButton(
               onPressed: () {
-                final currentPosition = _videoController!.value.position;
-                final newPosition = currentPosition - const Duration(seconds: 10);
-                _videoController!.seekTo(newPosition);
+                if (_useMediaKit && _mediaKitPlayer != null) {
+                  final currentPosition = _mediaKitPlayer!.state.position;
+                  final newPosition = currentPosition - const Duration(seconds: 10);
+                  _mediaKitPlayer!.seek(newPosition);
+                } else if (_videoController != null) {
+                  final currentPosition = _videoController!.value.position;
+                  final newPosition = currentPosition - const Duration(seconds: 10);
+                  _videoController!.seekTo(newPosition);
+                }
                 _startHideTimer();
               },
               icon: const Icon(Icons.replay_10_rounded, color: Colors.white),
@@ -1127,14 +1329,26 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             child: IconButton(
               onPressed: () {
                 setState(() {
-                  if (isPlaying) {
-                    _videoController!.pause();
-                    _hideControlsTimer?.cancel();
-                    _disableWakelock();
-                  } else {
-                    _videoController!.play();
-                    _startHideTimer();
-                    _enableWakelock();
+                  if (_useMediaKit && _mediaKitPlayer != null) {
+                    if (isPlaying) {
+                      _mediaKitPlayer!.pause();
+                      _hideControlsTimer?.cancel();
+                      _disableWakelock();
+                    } else {
+                      _mediaKitPlayer!.play();
+                      _startHideTimer();
+                      _enableWakelock();
+                    }
+                  } else if (_videoController != null) {
+                    if (isPlaying) {
+                      _videoController!.pause();
+                      _hideControlsTimer?.cancel();
+                      _disableWakelock();
+                    } else {
+                      _videoController!.play();
+                      _startHideTimer();
+                      _enableWakelock();
+                    }
                   }
                 });
               },
@@ -1154,10 +1368,17 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             ),
             child: IconButton(
               onPressed: () {
-                final currentPosition = _videoController!.value.position;
-                final duration = _videoController!.value.duration;
-                final newPosition = currentPosition + const Duration(seconds: 10);
-                if (newPosition < duration) _videoController!.seekTo(newPosition);
+                if (_useMediaKit && _mediaKitPlayer != null) {
+                  final currentPosition = _mediaKitPlayer!.state.position;
+                  final duration = _mediaKitPlayer!.state.duration;
+                  final newPosition = currentPosition + const Duration(seconds: 10);
+                  if (newPosition < duration) _mediaKitPlayer!.seek(newPosition);
+                } else if (_videoController != null) {
+                  final currentPosition = _videoController!.value.position;
+                  final duration = _videoController!.value.duration;
+                  final newPosition = currentPosition + const Duration(seconds: 10);
+                  if (newPosition < duration) _videoController!.seekTo(newPosition);
+                }
                 _startHideTimer();
               },
               icon: const Icon(Icons.forward_10_rounded, color: Colors.white),
@@ -1184,10 +1405,23 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     );
   }
 
-  // PORTRAIT BOTTOM CONTROLS
+  // PORTRAIT BOTTOM CONTROLS - Works for both MediaKit and VideoPlayer
   Widget _buildPortraitBottomControls() {
-    final position = _videoController!.value.position;
-    final duration = _videoController!.value.duration;
+    Duration position = Duration.zero;
+    Duration duration = Duration.zero;
+    double volume = 1.0;
+    
+    // Get state from appropriate player
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      position = _mediaKitPlayer!.state.position;
+      duration = _mediaKitPlayer!.state.duration;
+      volume = _mediaKitPlayer!.state.volume / 100.0; // MediaKit uses 0-100
+    } else if (_videoController != null) {
+      position = _videoController!.value.position;
+      duration = _videoController!.value.duration;
+      volume = _videoController!.value.volume;
+    }
+    
     final progress = duration.inMilliseconds > 0 ? position.inMilliseconds / duration.inMilliseconds : 0.0;
     
     return Positioned(
@@ -1228,7 +1462,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                       ),
                       child: Slider(
                         value: progress.clamp(0.0, 1.0),
-                        onChanged: (value) => _videoController!.seekTo(duration * value),
+                        onChanged: (value) {
+                          final newPosition = duration * value;
+                          if (_useMediaKit && _mediaKitPlayer != null) {
+                            _mediaKitPlayer!.seek(newPosition);
+                          } else if (_videoController != null) {
+                            _videoController!.seekTo(newPosition);
+                          }
+                        },
                         activeColor: const Color(0xFF6366F1),
                         inactiveColor: Colors.white24,
                       ),
@@ -1254,11 +1495,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                   IconButton(
                     onPressed: () {
                       setState(() {
-                        _videoController!.setVolume(_videoController!.value.volume > 0 ? 0 : 1);
+                        if (_useMediaKit && _mediaKitPlayer != null) {
+                          _mediaKitPlayer!.setVolume(volume > 0 ? 0 : 100);
+                        } else if (_videoController != null) {
+                          _videoController!.setVolume(volume > 0 ? 0 : 1);
+                        }
                       });
                     },
                     icon: Icon(
-                      _videoController!.value.volume > 0 
+                      volume > 0 
                           ? Icons.volume_up_rounded 
                           : Icons.volume_off_rounded,
                       color: Colors.white,
@@ -1306,7 +1551,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           children: [
             IconButton(
               onPressed: () {
+                // Exit fullscreen first, then navigate back
                 SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  if (mounted) {
+                    _subtitleTimer?.cancel();
+                    _hideControlsTimer?.cancel();
+                    Navigator.of(context).pop();
+                  }
+                });
               },
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
               padding: const EdgeInsets.all(8),
@@ -1360,9 +1613,17 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     );
   }
 
-  // LANDSCAPE CENTER CONTROLS
+  // LANDSCAPE CENTER CONTROLS - Works for both MediaKit and VideoPlayer
   Widget _buildLandscapeCenterControls() {
-    final isPlaying = _videoController!.value.isPlaying;
+    bool isPlaying = false;
+    
+    // Get playing state from appropriate player
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      isPlaying = _mediaKitPlayer!.state.playing;
+    } else if (_videoController != null) {
+      isPlaying = _videoController!.value.isPlaying;
+    }
+    
     return Center(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1389,9 +1650,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             ),
             child: IconButton(
               onPressed: () {
-                final currentPosition = _videoController!.value.position;
-                final newPosition = currentPosition - const Duration(seconds: 10);
-                _videoController!.seekTo(newPosition);
+                if (_useMediaKit && _mediaKitPlayer != null) {
+                  final currentPosition = _mediaKitPlayer!.state.position;
+                  final newPosition = currentPosition - const Duration(seconds: 10);
+                  _mediaKitPlayer!.seek(newPosition);
+                } else if (_videoController != null) {
+                  final currentPosition = _videoController!.value.position;
+                  final newPosition = currentPosition - const Duration(seconds: 10);
+                  _videoController!.seekTo(newPosition);
+                }
                 _startHideTimer();
               },
               icon: const Icon(Icons.replay_10_rounded, color: Colors.white),
@@ -1414,14 +1681,26 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             child: IconButton(
               onPressed: () {
                 setState(() {
-                  if (isPlaying) {
-                    _videoController!.pause();
-                    _hideControlsTimer?.cancel();
-                    _disableWakelock();
-                  } else {
-                    _videoController!.play();
-                    _startHideTimer();
-                    _enableWakelock();
+                  if (_useMediaKit && _mediaKitPlayer != null) {
+                    if (isPlaying) {
+                      _mediaKitPlayer!.pause();
+                      _hideControlsTimer?.cancel();
+                      _disableWakelock();
+                    } else {
+                      _mediaKitPlayer!.play();
+                      _startHideTimer();
+                      _enableWakelock();
+                    }
+                  } else if (_videoController != null) {
+                    if (isPlaying) {
+                      _videoController!.pause();
+                      _hideControlsTimer?.cancel();
+                      _disableWakelock();
+                    } else {
+                      _videoController!.play();
+                      _startHideTimer();
+                      _enableWakelock();
+                    }
                   }
                 });
               },
@@ -1441,10 +1720,17 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             ),
             child: IconButton(
               onPressed: () {
-                final currentPosition = _videoController!.value.position;
-                final duration = _videoController!.value.duration;
-                final newPosition = currentPosition + const Duration(seconds: 10);
-                if (newPosition < duration) _videoController!.seekTo(newPosition);
+                if (_useMediaKit && _mediaKitPlayer != null) {
+                  final currentPosition = _mediaKitPlayer!.state.position;
+                  final duration = _mediaKitPlayer!.state.duration;
+                  final newPosition = currentPosition + const Duration(seconds: 10);
+                  if (newPosition < duration) _mediaKitPlayer!.seek(newPosition);
+                } else if (_videoController != null) {
+                  final currentPosition = _videoController!.value.position;
+                  final duration = _videoController!.value.duration;
+                  final newPosition = currentPosition + const Duration(seconds: 10);
+                  if (newPosition < duration) _videoController!.seekTo(newPosition);
+                }
                 _startHideTimer();
               },
               icon: const Icon(Icons.forward_10_rounded, color: Colors.white),
@@ -1471,10 +1757,22 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     );
   }
 
-  // LANDSCAPE BOTTOM CONTROLS
+  // LANDSCAPE BOTTOM CONTROLS - Works for both MediaKit and VideoPlayer
   Widget _buildLandscapeBottomControls() {
-    final position = _videoController!.value.position;
-    final duration = _videoController!.value.duration;
+    Duration position = Duration.zero;
+    Duration duration = Duration.zero;
+    double volume = 1.0;
+    
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      position = _mediaKitPlayer!.state.position;
+      duration = _mediaKitPlayer!.state.duration;
+      volume = _mediaKitPlayer!.state.volume / 100.0;
+    } else if (_videoController != null) {
+      position = _videoController!.value.position;
+      duration = _videoController!.value.duration;
+      volume = _videoController!.value.volume;
+    }
+    
     final progress = duration.inMilliseconds > 0 ? position.inMilliseconds / duration.inMilliseconds : 0.0;
     
     return Positioned(
@@ -1513,7 +1811,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                     ),
                     child: Slider(
                       value: progress.clamp(0.0, 1.0),
-                      onChanged: (value) => _videoController!.seekTo(duration * value),
+                      onChanged: (value) {
+                        final newPosition = duration * value;
+                        if (_useMediaKit && _mediaKitPlayer != null) {
+                          _mediaKitPlayer!.seek(newPosition);
+                        } else if (_videoController != null) {
+                          _videoController!.seekTo(newPosition);
+                        }
+                      },
                       activeColor: const Color(0xFF6366F1),
                       inactiveColor: Colors.white24,
                     ),
@@ -1539,11 +1844,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                     IconButton(
                       onPressed: () {
                         setState(() {
-                          _videoController!.setVolume(_videoController!.value.volume > 0 ? 0 : 1);
+                          if (_useMediaKit && _mediaKitPlayer != null) {
+                            _mediaKitPlayer!.setVolume(volume > 0 ? 0 : 100);
+                          } else if (_videoController != null) {
+                            _videoController!.setVolume(volume > 0 ? 0 : 1);
+                          }
                         });
                       },
                       icon: Icon(
-                        _videoController!.value.volume > 0 
+                        volume > 0 
                             ? Icons.volume_up_rounded 
                             : Icons.volume_off_rounded,
                         color: Colors.white,
