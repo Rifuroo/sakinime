@@ -79,8 +79,8 @@ A modern, cross-platform anime streaming application built with Flutter. Stream 
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Rifuroo/sakinimesakinime.git
-   cd sakinimesakinime
+   git clone https://github.com/Rifuroo/sakinime.git
+   cd sakinime
    ```
 
 2. **Install dependencies**
