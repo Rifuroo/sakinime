@@ -7,7 +7,9 @@ import '../providers/anime_provider.dart';
 import '../models/anime_model.dart';
 import '../widgets/anime_card.dart';
 import '../widgets/search_screen.dart';
+import '../widgets/continue_watching_section.dart';
 import 'home_collection_screen.dart';
+import 'watch_history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -273,6 +275,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           _buildDiscoverHeader(provider),
                           if (provider.homeSectionsError != null)
                             _buildErrorBanner(provider.homeSectionsError!),
+                          // Continue Watching Section
+                          const ContinueWatchingSection(),
                           for (final section in [
                             {
                               'type': HomeCollectionType.recentEpisodes,
@@ -814,17 +818,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
               Expanded(
-                child: ListView.separated(
-                  itemCount: HomeSidebarCategory.values.length,
-                  separatorBuilder: (_, __) => Divider(
-                    color: Colors.white.withOpacity(0.05),
-                    height: 1,
-                  ),
-                  itemBuilder: (context, index) {
-                    final category = HomeSidebarCategory.values[index];
-                    return ListTile(
+                child: Column(
+                  children: [
+                    // Watch History Menu Item
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.history,
+                          color: Color(0xFF818CF8),
+                          size: 20,
+                        ),
+                      ),
                       title: Text(
-                        category.label,
+                        'Watch History',
                         style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -837,10 +848,49 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                       onTap: () {
                         Navigator.of(context).pop();
-                        _openSidebarCategory(category);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const WatchHistoryScreen(),
+                          ),
+                        );
                       },
-                    );
-                  },
+                    ),
+                    Divider(
+                      color: Colors.white.withOpacity(0.05),
+                      height: 1,
+                    ),
+                    // Existing category items
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: HomeSidebarCategory.values.length,
+                        separatorBuilder: (_, __) => Divider(
+                          color: Colors.white.withOpacity(0.05),
+                          height: 1,
+                        ),
+                        itemBuilder: (context, index) {
+                          final category = HomeSidebarCategory.values[index];
+                          return ListTile(
+                            title: Text(
+                              category.label,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.chevron_right_rounded,
+                              color: Colors.white70,
+                            ),
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _openSidebarCategory(category);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

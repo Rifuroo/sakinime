@@ -1,0 +1,714 @@
+// screens/watch_history_screen.dart - Watch History Screen
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../services/watch_history_service.dart';
+import '../widgets/anime_video_player.dart';
+import '../models/anime_model.dart';
+
+
+class WatchHistoryScreen extends StatefulWidget {
+  const WatchHistoryScreen({super.key});
+
+  @override
+  State<WatchHistoryScreen> createState() => _WatchHistoryScreenState();
+}
+
+class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<WatchHistoryItem> _allHistory = [];
+  List<WatchHistoryItem> _continueWatching = [];
+  List<WatchHistoryItem> _recentAnime = [];
+  Map<String, dynamic> _watchStats = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadWatchHistory();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadWatchHistory() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      final results = await Future.wait([
+        WatchHistoryService.getWatchHistory(),
+        WatchHistoryService.getContinueWatching(limit: 20),
+        WatchHistoryService.getRecentAnime(limit: 15),
+        WatchHistoryService.getWatchStats(),
+      ]);
+      
+      if (mounted) {
+        setState(() {
+          _allHistory = results[0] as List<WatchHistoryItem>;
+          _continueWatching = results[1] as List<WatchHistoryItem>;
+          _recentAnime = results[2] as List<WatchHistoryItem>;
+          _watchStats = results[3] as Map<String, dynamic>;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load watch history: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Clear Watch History',
+          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to clear all watch history? This action cannot be undone.',
+          style: GoogleFonts.inter(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Clear', style: GoogleFonts.inter(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await WatchHistoryService.clearHistory();
+      _loadWatchHistory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Watch history cleared'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  void _resumeWatching(WatchHistoryItem item) {
+    // Create Episode object from watch history item
+    final episode = Episode(
+      url: item.episodeId,
+      title: item.episodeTitle,
+      number: item.episodeNumber.toString(),
+      date: DateTime.now().toIso8601String(), // Required parameter
+      episodeNumber: item.episodeNumber,
+    );
+
+    // Navigate directly to video player
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AnimeVideoPlayer(
+          episodeToLoad: episode,
+          animeTitle: item.animeTitle,
+          allEpisodes: [episode], // Single episode for now
+          animePoster: item.animePoster,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0F0F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1A1A1A),
+        elevation: 0,
+        title: Text(
+          'Watch History',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+        ),
+        actions: [
+          if (!_isLoading && _allHistory.isNotEmpty)
+            IconButton(
+              onPressed: _clearHistory,
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              tooltip: 'Clear History',
+            ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: const Color(0xFF6366F1),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white54,
+          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          tabs: const [
+            Tab(text: 'Continue'),
+            Tab(text: 'Recent'),
+            Tab(text: 'All History'),
+          ],
+        ),
+      ),
+      body: _isLoading
+          ? _buildLoadingState()
+          : Column(
+              children: [
+                _buildStatsCard(),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildContinueWatchingTab(),
+                      _buildRecentAnimeTab(),
+                      _buildAllHistoryTab(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: Color(0xFF6366F1)),
+          SizedBox(height: 16),
+          Text(
+            'Loading watch history...',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsCard() {
+    if (_watchStats.isEmpty) return const SizedBox.shrink();
+
+    final totalEpisodes = _watchStats['totalEpisodes'] ?? 0;
+    final completedEpisodes = _watchStats['completedEpisodes'] ?? 0;
+    final uniqueAnime = _watchStats['uniqueAnime'] ?? 0;
+    final totalWatchTime = _watchStats['totalWatchTime'] as Duration? ?? Duration.zero;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.analytics_outlined,
+                  color: Color(0xFF818CF8),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Watch Statistics',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatItem(
+                  'Episodes',
+                  '$totalEpisodes',
+                  Icons.play_circle_outline,
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Completed',
+                  '$completedEpisodes',
+                  Icons.check_circle_outline,
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Anime',
+                  '$uniqueAnime',
+                  Icons.movie_outlined,
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Watch Time',
+                  _formatWatchTime(totalWatchTime),
+                  Icons.access_time,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: const Color(0xFF818CF8), size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            color: Colors.white54,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatWatchTime(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
+    }
+  }
+
+  Widget _buildContinueWatchingTab() {
+    if (_continueWatching.isEmpty) {
+      return _buildEmptyState(
+        'No episodes to continue',
+        'Episodes you\'ve partially watched will appear here',
+        Icons.play_circle_outline,
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _continueWatching.length,
+      itemBuilder: (context, index) {
+        final item = _continueWatching[index];
+        return _buildHistoryCard(item, showProgress: true);
+      },
+    );
+  }
+
+  Widget _buildRecentAnimeTab() {
+    if (_recentAnime.isEmpty) {
+      return _buildEmptyState(
+        'No recent anime',
+        'Anime you\'ve recently watched will appear here',
+        Icons.history,
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _recentAnime.length,
+      itemBuilder: (context, index) {
+        final item = _recentAnime[index];
+        return _buildAnimeCard(item);
+      },
+    );
+  }
+
+  Widget _buildAllHistoryTab() {
+    if (_allHistory.isEmpty) {
+      return _buildEmptyState(
+        'No watch history',
+        'Your watch history will appear here as you watch episodes',
+        Icons.history,
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _allHistory.length,
+      itemBuilder: (context, index) {
+        final item = _allHistory[index];
+        return _buildHistoryCard(item, showProgress: true);
+      },
+    );
+  }
+
+  Widget _buildEmptyState(String title, String subtitle, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 48,
+              color: Colors.white24,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: GoogleFonts.inter(
+              color: Colors.white54,
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard(WatchHistoryItem item, {bool showProgress = false}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            _resumeWatching(item);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Poster
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 60,
+                    height: 80,
+                    child: item.animePoster != null
+                        ? CachedNetworkImage(
+                            imageUrl: item.animePoster!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.white.withOpacity(0.1),
+                              child: const Icon(
+                                Icons.movie,
+                                color: Colors.white24,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.white.withOpacity(0.1),
+                              child: const Icon(
+                                Icons.broken_image,
+                                color: Colors.white24,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.white.withOpacity(0.1),
+                            child: const Icon(
+                              Icons.movie,
+                              color: Colors.white24,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.animeTitle,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.episodeTitle,
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366F1).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Episode ${item.episodeNumber}',
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF818CF8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (item.isCompleted)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'Completed',
+                                style: GoogleFonts.inter(
+                                  color: Colors.green,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (showProgress) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: item.progressPercentage,
+                                backgroundColor: Colors.white.withOpacity(0.1),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  item.isCompleted ? Colors.green : const Color(0xFF6366F1),
+                                ),
+                                minHeight: 3,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              item.progressText,
+                              style: GoogleFonts.inter(
+                                color: Colors.white54,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatLastWatched(item.lastWatched),
+                        style: GoogleFonts.inter(
+                          color: Colors.white38,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Action button
+                IconButton(
+                  onPressed: () {
+                    // TODO: Show options (remove from history, etc.)
+                  },
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnimeCard(WatchHistoryItem item) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            _resumeWatching(item);
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Poster
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 60,
+                    height: 80,
+                    child: item.animePoster != null
+                        ? CachedNetworkImage(
+                            imageUrl: item.animePoster!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.white.withOpacity(0.1),
+                              child: const Icon(
+                                Icons.movie,
+                                color: Colors.white24,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.white.withOpacity(0.1),
+                              child: const Icon(
+                                Icons.broken_image,
+                                color: Colors.white24,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.white.withOpacity(0.1),
+                            child: const Icon(
+                              Icons.movie,
+                              color: Colors.white24,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.animeTitle,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Last watched: ${item.episodeTitle}',
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatLastWatched(item.lastWatched),
+                        style: GoogleFonts.inter(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white54,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatLastWatched(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+    } else {
+      return 'Just now';
+    }
+  }
+}
