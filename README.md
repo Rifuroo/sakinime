@@ -2,6 +2,37 @@
 
 A modern, cross-platform anime streaming application built with Flutter. Stream your favorite anime with high-quality video playback, subtitle support, and seamless user experience across all devices.
 
+## 📱 Screenshots & Demo
+
+### 🎬 App Preview
+<div align="center">
+  
+![App Demo](https://via.placeholder.com/800x450/0a0e27/ffffff?text=🎌+Sakinime+Demo+GIF)
+
+*Replace this placeholder with your actual app demo GIF*
+
+</div>
+
+### 📸 Screenshots
+
+<div align="center">
+
+| Home Screen | Video Player | Search & Discovery |
+|-------------|--------------|-------------------|
+| ![Home](https://via.placeholder.com/250x450/0a0e27/ffffff?text=🏠+Home) | ![Player](https://via.placeholder.com/250x450/0a0e27/ffffff?text=▶️+Player) | ![Search](https://via.placeholder.com/250x450/0a0e27/ffffff?text=🔍+Search) |
+
+| Anime Details | Watch History | Settings |
+|---------------|---------------|----------|
+| ![Details](https://via.placeholder.com/250x450/0a0e27/ffffff?text=📋+Details) | ![History](https://via.placeholder.com/250x450/0a0e27/ffffff?text=📚+History) | ![Settings](https://via.placeholder.com/250x450/0a0e27/ffffff?text=⚙️+Settings) |
+
+</div>
+
+> **📝 Note:** Replace placeholder images with actual screenshots of your app. You can use tools like:
+> - **Android**: `adb shell screencap` or Android Studio
+> - **iOS**: Simulator screenshots or Xcode
+> - **Desktop**: Built-in screenshot tools
+> - **GIF Recording**: [LICEcap](https://www.cockos.com/licecap/) or [ScreenToGif](https://www.screentogif.com/)
+
 ## ✨ Features
 
 ### 🎥 Video Streaming
@@ -139,6 +170,34 @@ lib/
 - [ ] **Advanced Filters** - More search and filter options
 - [ ] **Recommendation Engine** - AI-powered suggestions
 - [ ] **Community Features** - Reviews and ratings
+
+## 📷 Adding Screenshots
+
+To update the README with actual screenshots:
+
+1. **Take screenshots** of your app on different platforms
+2. **Save them** in the `screenshots/` folder with descriptive names:
+   ```
+   screenshots/
+   ├── home_screen.png
+   ├── video_player.png
+   ├── search_screen.png
+   ├── anime_details.png
+   ├── watch_history.png
+   ├── settings_screen.png
+   └── demo.gif
+   ```
+3. **Update README.md** by replacing placeholder URLs with:
+   ```markdown
+   ![Home](screenshots/home_screen.png)
+   ![Demo](screenshots/demo.gif)
+   ```
+
+### 🎥 Creating Demo GIF
+- **Record your screen** while using the app
+- **Keep it under 10MB** for GitHub compatibility
+- **Show key features**: navigation, video playback, search
+- **Duration**: 15-30 seconds optimal
 
 ## 🤝 Contributing
 
