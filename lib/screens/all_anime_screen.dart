@@ -29,43 +29,48 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
     super.initState();
     
     _starController = AnimationController(
-      duration: const Duration(seconds: 20),
-      vsync: this,
-    )..repeat();
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = Provider.of<AnimeProvider>(context, listen: false);
-      if (provider.allAnimes.isEmpty) {
-        provider.fetchAllAnimes(page: 1);
+    duration: const Duration(seconds: 20),
+    vsync: this,
+  )..repeat();
+  
+  _scrollController.addListener(_onScroll);
+  
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final provider = Provider.of<AnimeProvider>(context, listen: false);
+    if (provider.allAnimes.isEmpty) {
+      provider.fetchAllAnimes(page: 1);
+    }
+  });
+}
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      if (_scrollController.position.pixels >= 
+          _scrollController.position.maxScrollExtent - 400) {
+        _loadMoreItems();
       }
-    });
+    }
   }
 
   void _loadMoreItems() {
     final provider = Provider.of<AnimeProvider>(context, listen: false);
-    final displayList = _isSearching ? provider.searchResults : provider.allAnimes;
-    
-    if (_displayedItems < displayList.length) {
-      setState(() {
-        _displayedItems = (_displayedItems + _batchSize).clamp(0, displayList.length);
-      });
-    } else if (provider.hasMorePages && !provider.isLoadingMore) {
+    if (!provider.isLoadingMore && provider.hasMorePages) {
       _loadMoreFromAPI();
     }
   }
 
   void _loadMoreFromAPI() {
     final provider = Provider.of<AnimeProvider>(context, listen: false);
+    final nextPage = provider.currentPage + 1;
     
     if (_isSearching && _searchController.text.isNotEmpty) {
       provider.searchAnimes(
         _searchController.text.trim(),
-        page: _currentPage + 1,
+        page: nextPage,
       );
     } else {
-      provider.fetchAllAnimes(page: _currentPage + 1);
+      provider.fetchAllAnimes(page: nextPage);
     }
-    setState(() => _currentPage++);
   }
 
   Future<void> _onSearch(String query) async {
@@ -127,8 +132,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                   ? provider.searchResults 
                   : provider.allAnimes;
               
-              final itemsToShow = displayList.take(_displayedItems).toList();
-              final hasMoreToDisplay = _displayedItems < displayList.length;
+              final itemsToShow = displayList;
               
               return RefreshIndicator(
                 onRefresh: _refresh,
@@ -498,8 +502,8 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                 ),
                               ),
 
-                    // Load More Button
-                    if ((hasMoreToDisplay || provider.hasMorePages) && displayList.isNotEmpty)
+                    // Load More Indicator
+                    if (provider.hasMorePages && displayList.isNotEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -534,35 +538,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                     ),
                                   ),
                                 )
-                              : SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _loadMoreItems,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF1E293B),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        side: BorderSide(
-                                          color: const Color(0xFF6366F1).withOpacity(0.3),
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      hasMoreToDisplay
-                                          ? 'Show ${(displayList.length - _displayedItems).clamp(0, _batchSize)} More'
-                                          : 'Load More',
-                                      style: GoogleFonts.inter(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                        letterSpacing: -0.2,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                : const SizedBox.shrink(),
                         ),
                       ),
 

@@ -57,7 +57,10 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
 
     try {
       final provider = Provider.of<AnimeProvider>(context, listen: false);
-      final result = await provider.fetchHomeCollectionPage(widget.type, page: page);
+      final resultData = await provider.fetchHomeCollectionPage(widget.type, page: page);
+      
+      final result = resultData['animes'] as List<Anime>;
+      final pagination = resultData['pagination'] as Map<String, dynamic>;
 
       setState(() {
         if (page == 1) {
@@ -70,8 +73,8 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
           _animes.addAll(filtered);
         }
 
-        _currentPage = page;
-        _hasMore = result.length >= 16;
+        _currentPage = pagination['currentPage'] ?? page;
+        _hasMore = pagination['hasNextPage'] ?? false;
       });
     } catch (e) {
       setState(() {
@@ -231,7 +234,9 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         if (index == _animes.length - 2 && _hasMore && !_isLoadingMore) {
-                          _loadMore();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _loadMore();
+                          });
                         }
                         return AnimeCard(anime: _animes[index]);
                       },

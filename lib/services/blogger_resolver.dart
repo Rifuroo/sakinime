@@ -1,7 +1,6 @@
 // services/blogger_resolver.dart - WITH OTAKUFILES RESOLVER
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
 
 class BloggerResolver {
   static final Dio _dio = Dio(BaseOptions(
@@ -420,6 +419,7 @@ class BloggerResolver {
            lowerUrl.contains('googlevideo.com');
   }
 
+  // ignore: unused_element
   static bool _isValidVideoUrl(String url) {
     if (url.length < 10) return false;
     if (_isBadHost(url)) return false;

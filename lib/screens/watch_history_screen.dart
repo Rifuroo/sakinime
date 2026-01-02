@@ -2,7 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import '../services/watch_history_service.dart';
+import '../services/anime_service.dart';
 import '../widgets/anime_video_player.dart';
 import '../models/anime_model.dart';
 
@@ -110,27 +112,91 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
     }
   }
 
-  void _resumeWatching(WatchHistoryItem item) {
-    // Create Episode object from watch history item
-    final episode = Episode(
-      url: item.episodeId,
-      title: item.episodeTitle,
-      number: item.episodeNumber.toString(),
-      date: DateTime.now().toIso8601String(), // Required parameter
-      episodeNumber: item.episodeNumber,
-    );
+  Future<void> _resumeWatching(WatchHistoryItem item) async {
+    // Show a small loading indicator if needed or just handle it silently
+    // since we already have basic item data. 
+    // But for next/prev episodes, we need the full list.
+    
+    try {
+      // Create a temporary episode object from history if fetch fails
+      final initialEpisode = Episode(
+        url: item.episodeId,
+        title: item.episodeTitle,
+        number: item.episodeNumber.toString(),
+        date: DateTime.now().toIso8601String(),
+        episodeNumber: item.episodeNumber,
+      );
 
-    // Navigate directly to video player
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AnimeVideoPlayer(
-          episodeToLoad: episode,
-          animeTitle: item.animeTitle,
-          allEpisodes: [episode], // Single episode for now
-          animePoster: item.animePoster,
+      // Fetch full details to get all episodes for the player
+      final animeService = AnimeService();
+      var fullDetail = await animeService.getAnimeDetail(item.animeId);
+      
+      // Fallback: If detail fetch fails by ID (common in old history), try searching by title
+      if ((fullDetail == null || fullDetail.episodes.isEmpty) && item.animeTitle.isNotEmpty) {
+        if (kDebugMode) print('🔍 History fallback: searching for "${item.animeTitle}"');
+        final searchResult = await animeService.searchAnime(item.animeTitle);
+        if (searchResult.isNotEmpty) {
+           // Get detail for the first search result
+           final animeId = searchResult[0].id;
+           await WatchHistoryService.migrateAnimeId(item.animeId, animeId);
+           fullDetail = await animeService.getAnimeDetail(animeId);
+        }
+      }
+      
+      List<Episode> allEpisodes = [initialEpisode];
+      if (fullDetail != null && fullDetail.episodes.isNotEmpty) {
+        allEpisodes = fullDetail.episodes;
+      }
+
+      // Find the specific episode in the full list if possible
+      Episode episodeToLoad = initialEpisode;
+      try {
+        episodeToLoad = allEpisodes.firstWhere(
+          (e) => e.url == item.episodeId || e.number == item.episodeNumber.toString(),
+          orElse: () => initialEpisode,
+        );
+      } catch (_) {}
+
+      if (!mounted) return;
+
+      // Navigate to video player with full list
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => AnimeVideoPlayer(
+            episodeToLoad: episodeToLoad,
+            animeId: item.animeId,
+            animeTitle: item.animeTitle,
+            allEpisodes: allEpisodes,
+            animePoster: item.animePoster,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (kDebugMode) print('Error resuming from history: $e');
+      
+      if (!mounted) return;
+      
+      // Fallback: Navigate with single episode if detail fetch fails
+      final fallbackEpisode = Episode(
+        url: item.episodeId,
+        title: item.episodeTitle,
+        number: item.episodeNumber.toString(),
+        date: DateTime.now().toIso8601String(),
+        episodeNumber: item.episodeNumber,
+      );
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => AnimeVideoPlayer(
+            episodeToLoad: fallbackEpisode,
+            animeId: item.animeId,
+            animeTitle: item.animeTitle,
+            allEpisodes: [fallbackEpisode],
+            animePoster: item.animePoster,
+          ),
+        ),
+      );
+    }
   }
 
   @override

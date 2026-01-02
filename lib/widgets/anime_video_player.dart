@@ -19,6 +19,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 class AnimeVideoPlayer extends StatefulWidget {
   final Episode episodeToLoad;
+  final String animeId;
   final String animeTitle;
   final List<Episode> allEpisodes;
   final String? animePoster;
@@ -26,6 +27,7 @@ class AnimeVideoPlayer extends StatefulWidget {
   const AnimeVideoPlayer({
     super.key,
     required this.episodeToLoad,
+    required this.animeId,
     required this.animeTitle,
     required this.allEpisodes,
     this.animePoster,
@@ -56,6 +58,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   String _translationLang = 'none'; // Selected translation language
   Map<String, String> _translatedSubtitles = {}; // Cache for translated subtitles
   bool _isTranslating = false; // Translation in progress
+  bool _isPreTranslating = false; // Background pre-translation in progress
   String _translationStyle = 'anime'; // Translation style: 'anime', 'formal', 'casual'
   
   bool _isLoadingEpisode = true;
@@ -134,6 +137,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   }
 
   void _startHideTimer() {
+    // Do not hide controls while in PiP mode
+    if (_isInPiP) return;
     _hideControlsTimer?.cancel();
     
     bool isPlaying = false;
@@ -196,6 +201,12 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         await _enableWakelock();
       }
       await platform.invokeMethod('enterPiP');
+      // Keep controls and subtitle overlay visible during PiP
+      if (mounted) {
+        setState(() {
+          _showControls = true;
+        });
+      }
     } catch (e) {}
   }
 
@@ -571,6 +582,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             url: url,
             type: type,
             quality: quality,
+            size: source['size'],
             source: 'zoro',
           ));
         }
@@ -696,6 +708,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         // Restart subtitle timer
         if (parsed.isNotEmpty) {
           _startSubtitleTimer();
+          
+          // Trigger pre-translation if language is selected
+          if (_translationLang != 'none') {
+            _preTranslateSubtitles();
+          }
         }
         
         if (kDebugMode) {
@@ -739,9 +756,10 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       if (quality.contains('360') || 
           quality.contains('480') || 
           quality.contains('720') || 
-          quality.contains('1080')) {
+          quality.contains('1080') ||
+          quality == 'auto') {
         
-        final normalizedQuality = quality.replaceAll(RegExp(r'[^0-9]'), '') + 'p';
+        final normalizedQuality = quality == 'auto' ? 'Auto' : quality.replaceAll(RegExp(r'[^0-9]'), '') + 'p';
         
         if (!uniqueQualities.containsKey(normalizedQuality)) {
           uniqueQualities[normalizedQuality] = link;
@@ -752,6 +770,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     // Sort by quality (highest first)
     final sorted = uniqueQualities.entries.toList()
       ..sort((a, b) {
+        if (a.key == 'Auto') return -1;
+        if (b.key == 'Auto') return 1;
         final aNum = int.tryParse(a.key.replaceAll('p', '')) ?? 0;
         final bNum = int.tryParse(b.key.replaceAll('p', '')) ?? 0;
         return bNum.compareTo(aNum);
@@ -841,6 +861,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           _mediaKitPlayer = Player();
           _mediaKitVideoController = VideoController(_mediaKitPlayer!);
           
+          // Disable native subtitles to avoid double rendering with our custom overlay
+          try {
+            _mediaKitPlayer!.setSubtitleTrack(SubtitleTrack.no());
+          } catch (_) {}
+          
           await _mediaKitPlayer!.open(Media(_currentStreamLink!.url));
           
           // Setup MediaKit position listener for subtitles
@@ -869,8 +894,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       if (!initialized) {
         try {
           if (kDebugMode) print('🔄 Strategy 2: VideoPlayer fallback');
+          
+          // Check if this is an HLS stream and set format hint for Android ExoPlayer
+          final isHls = _currentStreamLink!.type?.toLowerCase() == 'hls' ||
+                        _currentStreamLink!.url.toLowerCase().contains('.m3u8');
+          
           _videoController = VideoPlayerController.networkUrl(
             Uri.parse(_currentStreamLink!.url),
+            formatHint: isHls ? VideoFormat.hls : null,
             httpHeaders: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
               'Accept': '*/*',
@@ -904,6 +935,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                 _mediaKitPlayer = Player();
                 _mediaKitVideoController = VideoController(_mediaKitPlayer!);
                 
+                // Disable native subtitles
+                try {
+                  _mediaKitPlayer!.setSubtitleTrack(SubtitleTrack.no());
+                } catch (_) {}
+                
                 await _mediaKitPlayer!.open(Media(quality.url));
                 
                 // Setup subtitle listener
@@ -935,8 +971,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             // Fallback to VideoPlayer
             try {
               if (kDebugMode) print('🔄 Strategy 3b: Different quality with VideoPlayer (${quality.quality})');
+              
+              // Check if this is an HLS stream
+              final isHlsFallback = quality.type?.toLowerCase() == 'hls' ||
+                                    quality.url.toLowerCase().contains('.m3u8');
+              
               _videoController = VideoPlayerController.networkUrl(
                 Uri.parse(quality.url),
+                formatHint: isHlsFallback ? VideoFormat.hls : null,
               );
               
               await _videoController!.initialize().timeout(
@@ -1041,15 +1083,16 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   // Build MediaKit video player with subtitle overlay
   Widget _buildVideoPlayer() {
+    Widget videoWidget;
     if (_useMediaKit && _mediaKitVideoController != null) {
       // MediaKit Video WITHOUT native controls
-      return Video(
+      videoWidget = Video(
         controller: _mediaKitVideoController!,
         controls: NoVideoControls, // Disable native controls
       );
     } else if (_videoController != null) {
       // Fallback to basic VideoPlayer
-      return AspectRatio(
+      videoWidget = AspectRatio(
         aspectRatio: _videoController!.value.aspectRatio == 0 
             ? 16 / 9 
             : _videoController!.value.aspectRatio,
@@ -1057,13 +1100,21 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       );
     } else {
       // Loading state
-      return Container(
+      videoWidget = Container(
         color: Colors.black,
         child: const Center(
           child: CircularProgressIndicator(color: Color(0xFF6366F1)),
         ),
       );
     }
+    // Stack video with subtitle overlay (visible also in PiP)
+    return Stack(
+      children: [
+        videoWidget,
+        if (_isPlayerInitialized && _currentSubtitle.isNotEmpty)
+          _buildSubtitleOverlay(),
+      ],
+    );
   }
 
   // Update subtitle for MediaKit player
@@ -1196,7 +1247,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       }
       
       await WatchHistoryService.autoSaveProgress(
-        animeId: widget.animeTitle, // Use anime title as animeId
+        animeId: widget.animeId,
         animeTitle: widget.animeTitle,
         animePoster: widget.animePoster,
         episodeId: _currentEpisode!.url,
@@ -1273,18 +1324,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         isPlaying = _videoController!.value.isPlaying;
       }
 
-      // ✅ Skip update if video is paused (performance optimization)
-      if (!isPlaying) {
-        // Clear subtitle when paused
-        if (_currentSubtitle.isNotEmpty && mounted) {
-          setState(() {
-            _currentSubtitle = '';
-            _previousSubtitle = '';
-          });
-        }
-        return;
-      }
-
+      // Update subtitle tracker regardless of playing state to keep it visible while paused
       String newSubtitle = '';
 
       // Find subtitle that matches current position
@@ -1374,30 +1414,50 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _changeQuality(StreamLink newLink) async {
     if (_currentStreamLink?.url == newLink.url) return;
     
-    final currentPosition = _videoController?.value.position ?? Duration.zero;
-    final wasPlaying = _videoController?.value.isPlaying ?? false;
+    Duration currentPosition = Duration.zero;
+    bool wasPlaying = false;
+
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      currentPosition = _mediaKitPlayer!.state.position;
+      wasPlaying = _mediaKitPlayer!.state.playing;
+    } else if (_videoController != null) {
+      currentPosition = _videoController!.value.position;
+      wasPlaying = _videoController!.value.isPlaying;
+    }
     
     // ✅ Proper cleanup before switching quality
     if (_videoController != null) {
       _videoController!.removeListener(_onVideoStateChanged);
     }
-    _videoController?.pause();
-    _videoController?.dispose();
+    
+    if (_useMediaKit && _mediaKitPlayer != null) {
+      await _mediaKitPlayer!.pause();
+      await _mediaKitPlayer!.dispose();
+      _mediaKitVideoController = null;
+    } else if (_videoController != null) {
+      await _videoController!.pause();
+      await _videoController!.dispose();
+    }
     
     if (mounted) {
       setState(() {
         _currentStreamLink = newLink;
+        _isPlayerInitialized = false;
+        _isLoadingPlayer = true;
       });
     }
     
     await _initializePlayer();
     
-    if (currentPosition.inSeconds > 0 && _isPlayerInitialized && _videoController != null) {
-      await _videoController!.seekTo(currentPosition);
-      if (wasPlaying) {
-        await _videoController!.play();
-        await _enableWakelock();
+    if (currentPosition.inSeconds > 0 && _isPlayerInitialized) {
+      if (_useMediaKit && _mediaKitPlayer != null) {
+        await _mediaKitPlayer!.seek(currentPosition);
+        if (wasPlaying) await _mediaKitPlayer!.play();
+      } else if (_videoController != null) {
+        await _videoController!.seekTo(currentPosition);
+        if (wasPlaying) await _videoController!.play();
       }
+      await _enableWakelock();
     }
   }
 
@@ -1475,12 +1535,191 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     await _loadWatchProgress(); // ✅ Load progress for new episode
   }
 
-  void _showQualityBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => _buildQualityBottomSheet(),
+  void _handleBackNavigation() {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    
+    if (isLandscape) {
+      if (kDebugMode) print('🔄 Reverting to portrait');
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    } else {
+      if (kDebugMode) print('🔙 Exiting player');
+      // Proper cleanup before navigation
+      _subtitleTimer?.cancel();
+      _hideControlsTimer?.cancel();
+      Navigator.of(context).pop();
+    }
+  }
+
+  // QUALITY DROP-DOWN MENU
+  Widget _buildQualityMenu(double iconSize) {
+    return PopupMenuButton<StreamLink>(
+      icon: Icon(Icons.high_quality_rounded, color: Colors.white, size: iconSize),
+      tooltip: 'Quality',
+      offset: const Offset(0, 40),
+      color: const Color(0xFF1a1f3a),
+      surfaceTintColor: Colors.transparent,
+      elevation: 10,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+      ),
+      onSelected: _changeQuality,
+      itemBuilder: (context) => _allAvailableQualities.map((link) {
+        final isSelected = _currentStreamLink?.url == link.url;
+        final quality = link.quality?.toUpperCase() ?? 'AUTO';
+        return PopupMenuItem<StreamLink>(
+          value: link,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                quality,
+                style: GoogleFonts.inter(
+                  color: isSelected ? const Color(0xFF818CF8) : Colors.white,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+              if (link.size != null) ...[
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    link.size!,
+                    style: GoogleFonts.inter(
+                      color: Colors.white38,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // SUBTITLE DROP-DOWN MENU
+  Widget _buildSubtitleMenu(double iconSize) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.closed_caption_rounded, color: Colors.white, size: iconSize),
+      tooltip: 'Subtitles',
+      offset: const Offset(0, 40),
+      color: const Color(0xFF1a1f3a),
+      surfaceTintColor: Colors.transparent,
+      elevation: 10,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+      ),
+      onSelected: (lang) => _loadSubtitle(lang),
+      itemBuilder: (context) {
+        final List<PopupMenuEntry<String>> items = [];
+        
+        // Available subtitles from API
+        items.add(
+          PopupMenuItem<String>(
+            enabled: false,
+            child: Text(
+              'TRACKS',
+              style: GoogleFonts.inter(color: const Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+            ),
+          )
+        );
+
+        items.addAll(_availableSubtitles.map((sub) {
+          final lang = sub['lang'] ?? 'Unknown';
+          final isSelected = _selectedSubtitleLang == lang;
+          return PopupMenuItem<String>(
+            value: lang,
+            child: Row(
+              children: [
+                if (isSelected) 
+                  const Icon(Icons.check_rounded, color: Color(0xFF818CF8), size: 16),
+                if (isSelected) const SizedBox(width: 8),
+                Text(
+                  lang,
+                  style: GoogleFonts.inter(
+                    color: isSelected ? const Color(0xFF818CF8) : Colors.white,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }));
+
+        items.add(const PopupMenuDivider(height: 12));
+
+        // Translation section
+        final hasSourceSubs = _availableSubtitles.isNotEmpty;
+        
+        items.add(
+          PopupMenuItem<String>(
+            enabled: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'AI TRANSLATE',
+                  style: GoogleFonts.inter(
+                    color: hasSourceSubs ? const Color(0xFF10B981) : Colors.white38, 
+                    fontSize: 10, 
+                    fontWeight: FontWeight.w800, 
+                    letterSpacing: 1.2
+                  ),
+                ),
+                if (!hasSourceSubs)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Source subtitles not available for this server',
+                      style: GoogleFonts.inter(color: Colors.redAccent.withOpacity(0.7), fontSize: 9, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+              ],
+            ),
+          )
+        );
+
+        // All supported languages from TranslationService
+        for (final entry in TranslationService.supportedLanguages.entries) {
+           final code = entry.key;
+           final label = TranslationService.getLanguageName(code);
+           final isSelected = _translationLang == code;
+           
+           items.add(
+             PopupMenuItem<String>(
+               enabled: hasSourceSubs || isSelected, // Allow disabling even if no source
+               onTap: hasSourceSubs || code == 'none' ? () => _setTranslationLanguage(code) : null,
+               child: Row(
+                 children: [
+                   if (isSelected) 
+                     const Icon(Icons.check_rounded, color: Color(0xFF10B981), size: 16),
+                   if (isSelected) const SizedBox(width: 8),
+                   Text(
+                     label,
+                     style: GoogleFonts.inter(
+                       color: isSelected ? const Color(0xFF10B981) : Colors.white70,
+                       fontSize: 13,
+                     ),
+                   ),
+                 ],
+               ),
+             )
+           );
+        }
+
+        return items;
+      },
     );
   }
 
@@ -1499,15 +1738,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     return match?.group(1) ?? title;
   }
 
-  void _showSubtitleBottomSheet() {
-    if (kDebugMode) print('📝 Subtitle button pressed');
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => _buildSubtitleBottomSheet(),
-    );
-  }
   
   // TRANSLATE SUBTITLE TEXT WITH STYLE
   Future<String> _translateSubtitle(String text) async {
@@ -1530,6 +1760,95 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     } catch (e) {
       if (kDebugMode) print('❌ Translation error: $e');
       return text;
+    }
+  }
+  
+  // PRE-TRANSLATE SUBTITLES IN BACKGROUND
+  Future<void> _preTranslateSubtitles() async {
+    if (_translationLang == 'none' || _subtitles.isEmpty || _isPreTranslating) return;
+    
+    setState(() => _isPreTranslating = true);
+    
+    try {
+      final lang = _translationLang;
+      final style = _translationStyle;
+      
+      // Get current play position to prioritize nearby subtitles
+      Duration currentPos = Duration.zero;
+      if (_useMediaKit && _mediaKitPlayer != null) {
+        currentPos = _mediaKitPlayer!.state.position;
+      } else if (_videoController != null) {
+        currentPos = _videoController!.value.position;
+      }
+      
+      // Separate subtitles into "upcoming" and "others"
+      final upcoming = _subtitles.where((s) => s.start >= currentPos).toList();
+      final previous = _subtitles.where((s) => s.start < currentPos).toList().reversed.toList();
+      
+      // Interleave them to translate around current position first
+      final List<ParsedSubtitle> toTranslate = [];
+      int i = 0;
+      while (i < upcoming.length || i < previous.length) {
+        if (i < upcoming.length) toTranslate.add(upcoming[i]);
+        if (i < previous.length) toTranslate.add(previous[i]);
+        i++;
+      }
+      
+      // Filter out those already in cache
+      final needed = toTranslate.where((sub) {
+        final cacheKey = '${sub.text.hashCode}_${lang}_$style';
+        return !_translatedSubtitles.containsKey(cacheKey);
+      }).toList();
+      
+      if (needed.isEmpty) {
+        setState(() => _isPreTranslating = false);
+        return;
+      }
+      
+      if (kDebugMode) {
+        print('🌐 Starting pre-translation for ${needed.length} subtitles in background...');
+      }
+      
+      // Translate in batches of 10
+      const int batchSize = 10;
+      for (int b = 0; b < needed.length; b += batchSize) {
+        // Check if language or episode changed midway
+        if (!mounted || _translationLang != lang || _translationStyle != style) break;
+        
+        final end = (b + batchSize < needed.length) ? b + batchSize : needed.length;
+        final batch = needed.sublist(b, end);
+        final texts = batch.map((s) => s.text).toList();
+        
+        final translatedTexts = await TranslationService.translateBatch(
+          texts, 
+          lang,
+          batchSize: batchSize,
+        );
+        
+        // Update cache
+        if (mounted) {
+          for (int j = 0; j < batch.length; j++) {
+            final cacheKey = '${batch[j].text.hashCode}_${lang}_$style';
+            _translatedSubtitles[cacheKey] = translatedTexts[j];
+          }
+          
+          if (kDebugMode && b % 50 == 0) {
+            print('🌐 Pre-translated ${b + batch.length}/${needed.length} items...');
+          }
+        }
+        
+        // Small delay to keep UI responsive
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      
+      if (kDebugMode) print('✅ Background pre-translation completed');
+      
+    } catch (e) {
+      if (kDebugMode) print('❌ Pre-translation error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isPreTranslating = false);
+      }
     }
   }
   
@@ -1561,6 +1880,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           });
         }
       }
+      
+      // Start background pre-translation for the rest
+      _preTranslateSubtitles();
     }
   }
   
@@ -1694,9 +2016,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               Center(child: _buildVideoPlayer()),
             if (_isLoadingEpisode || _isLoadingPlayer) _buildLoadingScreen(),
             if (_hasError) _buildErrorWidget(),
-            // ✅ Custom subtitle overlay - Show when there's subtitle text
-            if (_isPlayerInitialized && _currentSubtitle.isNotEmpty)
-              _buildSubtitleOverlay(),
             // Show/hide controls based on _showControls
             if (_showControls && _isPlayerInitialized && !_isInPiP) _buildPortraitTopBar(),
             if (_showControls && _isPlayerInitialized && !_isInPiP)
@@ -1718,9 +2037,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             Center(child: _buildVideoPlayer()),
           if (_isLoadingEpisode || _isLoadingPlayer) _buildLoadingScreen(),
           if (_hasError) _buildErrorWidget(),
-          // Custom subtitle overlay - Show when there's subtitle text
-          if (_isPlayerInitialized && _currentSubtitle.isNotEmpty)
-            _buildSubtitleOverlay(),
           // Show/hide controls based on _showControls
           if (_showControls && _isPlayerInitialized && !_isInPiP) _buildLandscapeTopBar(),
           if (_showControls && _isPlayerInitialized && !_isInPiP)
@@ -1734,107 +2050,46 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   // SUBTITLE OVERLAY WITH TRANSLATION INDICATOR
   Widget _buildSubtitleOverlay() {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    if (_currentSubtitle.isEmpty) return const SizedBox.shrink();
     
+    final size = MediaQuery.of(context).size;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final screenWidth = size.width;
+    
+    // Position it at the bottom center of the video stack
     return Positioned(
       left: 0,
       right: 0,
-      bottom: isLandscape ? 120 : 80, // Higher position to avoid controls
+      bottom: isLandscape ? 30 : 20, // Relative to the video surface
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Translation indicator
-            if (_translationLang != 'none')
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                      spreadRadius: 1,
-                    ),
-                  ],
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: isLandscape ? screenWidth * 0.7 : screenWidth * 0.85,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            _currentSubtitle,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: (screenWidth * 0.038).clamp(11.0, 15.0), // Compact size
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+              shadows: const [
+                Shadow(
+                  color: Colors.black,
+                  offset: Offset(1, 1),
+                  blurRadius: 2,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.translate,
-                      color: Colors.white,
-                      size: 12,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      TranslationService.getLanguageName(_translationLang),
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (_isTranslating) ...[
-                      const SizedBox(width: 4),
-                      const SizedBox(
-                        width: 8,
-                        height: 8,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            
-            // Subtitle text
-            Container(
-              constraints: BoxConstraints(maxWidth: isLandscape ? 1000 : 400),
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.9), // Very visible
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _translationLang != 'none' 
-                      ? const Color(0xFF10B981).withOpacity(0.5)
-                      : Colors.white.withOpacity(0.2),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Text(
-                _currentSubtitle,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: isLandscape ? 22 : 18, // Larger font
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black,
-                      offset: Offset(2, 2),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
+              ],
             ),
-          ],
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
     );
@@ -1858,32 +2113,17 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         child: Row(
           children: [
             IconButton(
-              onPressed: () {
-                if (kDebugMode) print('🔙 Back button pressed');
-                // Proper cleanup before navigation
-                _subtitleTimer?.cancel();
-                _hideControlsTimer?.cancel();
-                Navigator.of(context).pop();
-              },
+              onPressed: _handleBackNavigation,
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
               padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(),
             ),
             const Spacer(),
-            if (_availableSubtitles.isNotEmpty) // ✅ Subtitle button
-              IconButton(
-                onPressed: _showSubtitleBottomSheet,
-                icon: const Icon(Icons.closed_caption_rounded, color: Colors.white, size: 18),
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(),
-              ),
-            if (_allAvailableQualities.length > 1)
-              IconButton(
-                onPressed: _showQualityBottomSheet,
-                icon: const Icon(Icons.high_quality_rounded, color: Colors.white, size: 18),
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(),
-              ),
+            if (_availableSubtitles.isNotEmpty) // ✅ Subtitle Menu Dropdown
+              _buildSubtitleMenu(18),
+            if (_allAvailableQualities.length > 1) // ✅ Quality Menu Dropdown
+              _buildQualityMenu(18),
+            const SizedBox(width: 4),
             if (_isPiPSupported)
               IconButton(
                 onPressed: _enterPiP,
@@ -2186,17 +2426,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         child: Row(
           children: [
             IconButton(
-              onPressed: () {
-                // Exit fullscreen first, then navigate back
-                SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-                Future.delayed(const Duration(milliseconds: 100), () {
-                  if (mounted) {
-                    _subtitleTimer?.cancel();
-                    _hideControlsTimer?.cancel();
-                    Navigator.of(context).pop();
-                  }
-                });
-              },
+              onPressed: _handleBackNavigation,
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
               padding: const EdgeInsets.all(8),
             ),
@@ -2225,18 +2455,10 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                 ],
               ),
             ),
-            if (_availableSubtitles.isNotEmpty) // 
-              IconButton(
-                onPressed: _showSubtitleBottomSheet,
-                icon: const Icon(Icons.closed_caption_rounded, color: Colors.white, size: 20),
-                padding: const EdgeInsets.all(8),
-              ),
+            if (_availableSubtitles.isNotEmpty)
+              _buildSubtitleMenu(22),
             if (_allAvailableQualities.length > 1)
-              IconButton(
-                onPressed: _showQualityBottomSheet,
-                icon: const Icon(Icons.high_quality_rounded, color: Colors.white, size: 20),
-                padding: const EdgeInsets.all(8),
-              ),
+              _buildQualityMenu(20),
             if (_isPiPSupported)
               IconButton(
                 onPressed: _enterPiP,
@@ -2533,448 +2755,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     );
   }
 
-  // QUALITY BOTTOM SHEET
-  Widget _buildQualityBottomSheet() {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.6,
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.high_quality_rounded,
-                    color: Color(0xFF818CF8),
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Select Quality',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 1),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _allAvailableQualities.length,
-              itemBuilder: (context, index) {
-                final link = _allAvailableQualities[index];
-                final isSelected = _currentStreamLink?.url == link.url;
-                final quality = link.quality?.toUpperCase() ?? 'AUTO';
-                
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isSelected 
-                        ? const Color(0xFF6366F1).withOpacity(0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF6366F1)
-                          : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: ListTile(
-                    onTap: () {
-                      Navigator.pop(context);
-                      _changeQuality(link);
-                    },
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF6366F1).withOpacity(0.2)
-                            : Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        isSelected ? Icons.check_circle_rounded : Icons.play_circle_outline_rounded,
-                        color: isSelected ? const Color(0xFF818CF8) : Colors.white60,
-                        size: 24,
-                      ),
-                    ),
-                    title: Text(
-                      quality,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                        fontSize: 16,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    subtitle: Text(
-                      link.provider ?? 'Unknown',
-                      style: GoogleFonts.inter(
-                        color: Colors.white54,
-                        fontSize: 12,
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6366F1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'PLAYING',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          )
-                        : null,
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
-
-  // SUBTITLE BOTTOM SHEET WITH TRANSLATION
-  Widget _buildSubtitleBottomSheet() {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.closed_caption_rounded,
-                    color: Color(0xFF818CF8),
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Subtitle & Translation',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 1),
-          
-          // SUBTITLE SECTION
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              children: [
-                const Icon(Icons.subtitles, color: Colors.white70, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Subtitle Source',
-                  style: GoogleFonts.inter(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Subtitle options - Show all available subtitles
-          Flexible(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 200), // Increased height
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _availableSubtitles.length + 1,
-              itemBuilder: (context, index) {
-                final isOffOption = index == 0;
-                final lang = isOffOption ? 'OFF' : _availableSubtitles[index - 1]['lang']!;
-                final isSelected = isOffOption 
-                    ? _subtitles.isEmpty 
-                    : _selectedSubtitleLang == lang;
-                
-                return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 2),
-                  child: ListTile(
-                    onTap: () {
-                      if (isOffOption) {
-                        setState(() {
-                          _subtitles = [];
-                          _currentSubtitle = '';
-                          _subtitleTimer?.cancel();
-                        });
-                      } else {
-                        _loadSubtitle(lang);
-                      }
-                    },
-                    leading: Icon(
-                      isOffOption ? Icons.subtitles_off_outlined : Icons.closed_caption,
-                      color: isSelected ? const Color(0xFF818CF8) : Colors.white70,
-                      size: 18,
-                    ),
-                    title: Text(
-                      lang,
-                      style: GoogleFonts.inter(
-                        color: isSelected ? Colors.white : Colors.white70,
-                        fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                    subtitle: isOffOption ? null : Text(
-                      'VTT Subtitle',
-                      style: GoogleFonts.inter(
-                        color: Colors.white54,
-                        fontSize: 11,
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6366F1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'ACTIVE',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          )
-                        : null,
-                  ),
-                );
-              },
-            ),
-            ),
-          ),
-          
-          const Divider(color: Colors.white12, height: 1),
-          
-          // TRANSLATION SECTION
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              children: [
-                const Icon(Icons.translate, color: Colors.white70, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'AI Translation',
-                  style: GoogleFonts.inter(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                // Translation Style Selector
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFF6366F1).withOpacity(0.3),
-                    ),
-                  ),
-                  child: DropdownButton<String>(
-                    value: _translationStyle,
-                    underline: const SizedBox(),
-                    dropdownColor: const Color(0xFF1A1A1A),
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF818CF8),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'anime', child: Text('🎌 Anime')),
-                      DropdownMenuItem(value: 'casual', child: Text('😎 Casual')),
-                      DropdownMenuItem(value: 'formal', child: Text('👔 Formal')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        _setTranslationStyle(value);
-                      }
-                    },
-                  ),
-                ),
-                if (_isTranslating) ...[
-                  const SizedBox(width: 8),
-                  const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF6366F1),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          
-          // Translation options
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: TranslationService.supportedLanguages.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  // No translation option
-                  return ListTile(
-                    onTap: () => _setTranslationLanguage('none'),
-                    leading: Icon(
-                      Icons.translate_outlined,
-                      color: _translationLang == 'none' ? const Color(0xFF818CF8) : Colors.white70,
-                      size: 18,
-                    ),
-                    title: Text(
-                      'No Translation',
-                      style: GoogleFonts.inter(
-                        color: _translationLang == 'none' ? Colors.white : Colors.white70,
-                        fontSize: 14,
-                        fontWeight: _translationLang == 'none' ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                    trailing: _translationLang == 'none'
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6366F1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'ACTIVE',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          )
-                        : null,
-                  );
-                }
-                
-                final langEntry = TranslationService.supportedLanguages.entries.elementAt(index - 1);
-                final langCode = langEntry.key;
-                final langName = langEntry.value;
-                final isSelected = _translationLang == langCode;
-                
-                return ListTile(
-                  onTap: () => _setTranslationLanguage(langCode),
-                  leading: Icon(
-                    Icons.translate,
-                    color: isSelected ? const Color(0xFF818CF8) : Colors.white70,
-                    size: 18,
-                  ),
-                  title: Text(
-                    langName,
-                    style: GoogleFonts.inter(
-                      color: isSelected ? Colors.white : Colors.white70,
-                      fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'AI',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        )
-                      : null,
-                );
-              },
-            ),
-          ),
-          
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
 
   // EPISODE INFO
   Widget _buildEpisodeInfo() {

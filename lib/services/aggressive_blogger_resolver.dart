@@ -152,7 +152,7 @@ class AggressiveBloggerResolver {
       }
 
       // PRIORITY 3: Check for OtakuFiles in HTML
-      final otakuMatches = RegExp(r'https?://otakufiles\.net/[a-zA-Z0-9]+/[^\s"' + "'" + r'<>]+')
+      final otakuMatches = RegExp(r"https?://otakufiles\.net/[a-zA-Z0-9]+/[^\s" "\"'<>]+")
           .allMatches(htmlContent);
       
       for (final match in otakuMatches.take(1)) {
@@ -211,7 +211,7 @@ class AggressiveBloggerResolver {
       _resolveCache[url] = null;
       return null;
     } catch (e) {
-      if (kDebugMode) print('${"  " * depth}⚠️ ERROR: $e');
+      if (kDebugMode) debugPrint('${"  " * depth}⚠️ ERROR: $e');
       _resolveCache[url] = null;
       return null;
     }
@@ -275,7 +275,7 @@ class AggressiveBloggerResolver {
     final unique = qualities.toSet().where(_isValidVideoUrl).toList();
     
     if (unique.isNotEmpty && kDebugMode) {
-      print('${"  " * depth}📺 Blogger: ${unique.length} qualities');
+      debugPrint('${"  " * depth}📺 Blogger: ${unique.length} qualities');
     }
     
     return unique.isNotEmpty ? unique : null;
@@ -363,7 +363,7 @@ class AggressiveBloggerResolver {
             .replaceAll('\\', '');
         
         if (_isValidVideoUrl(videoUrl) && videoUrl.startsWith('http')) {
-          if (kDebugMode) print('${"  " * depth}✅ REGEX: ${videoUrl.substring(0, 60)}...');
+          if (kDebugMode) print('${"  " * depth}✅ REGEX: ${videoUrl.substring(0, videoUrl.length > 60 ? 60 : videoUrl.length)}...');
           return videoUrl;
         }
       }

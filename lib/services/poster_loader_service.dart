@@ -40,9 +40,9 @@ class PosterLoaderService {
       final cleaned = url.replaceAll(RegExp(r'-Episode-\d+(\.[a-z]+)$'), r'$1');
       
       if (cleaned != url && kDebugMode) {
-        print('🧹 Cleaned URL:');
-        print('   Before: ${url.substring(url.lastIndexOf('/') + 1)}');
-        print('   After: ${cleaned.substring(cleaned.lastIndexOf('/') + 1)}');
+        debugPrint('🧹 Cleaned URL:');
+        debugPrint('   Before: ${url.substring(url.lastIndexOf('/') + 1)}');
+        debugPrint('   After: ${cleaned.substring(cleaned.lastIndexOf('/') + 1)}');
       }
       
       return cleaned;
@@ -175,7 +175,7 @@ class PosterLoaderService {
                 if (kDebugMode) {
                   final filename = posterUrl.split('/').last;
                   print('✅ Poster loaded: $animeId');
-                  print('   URL: .../${filename}');
+                  print('   URL: .../$filename');
                 }
               } else {
                 if (kDebugMode) print('⚠️ Invalid poster URL for $animeId');

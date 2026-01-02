@@ -20,12 +20,17 @@ class VideoPlayerService {
 
     VideoPlayerController? controller;
 
+    // Check if this is an HLS stream for Android ExoPlayer format hint
+    final isHls = streamLink.type?.toLowerCase() == 'hls' ||
+                  streamLink.url.toLowerCase().contains('.m3u8');
+
     try {
       // ✅ Primary attempt with full headers
       controller = await _createWithHeaders(
         streamLink.url,
         customHeaders ?? _getDefaultHeaders(streamLink.url),
         _initTimeout,
+        isHls: isHls,
       );
 
       if (controller != null) {
@@ -44,6 +49,7 @@ class VideoPlayerService {
         streamLink.url,
         _getSimplifiedHeaders(),
         _fallbackTimeout,
+        isHls: isHls,
       );
 
       if (controller != null) {
@@ -58,7 +64,10 @@ class VideoPlayerService {
       // ✅ Fallback 2: No headers
       if (kDebugMode) print('🔄 Trying without headers...');
       
-      controller = VideoPlayerController.networkUrl(Uri.parse(streamLink.url));
+      controller = VideoPlayerController.networkUrl(
+        Uri.parse(streamLink.url),
+        formatHint: isHls ? VideoFormat.hls : null,
+      );
       
       await controller.initialize().timeout(_fallbackTimeout);
       
@@ -75,11 +84,13 @@ class VideoPlayerService {
   static Future<VideoPlayerController?> _createWithHeaders(
     String url,
     Map<String, String> headers,
-    Duration timeout,
-  ) async {
+    Duration timeout, {
+    bool isHls = false,
+  }) async {
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(url),
       httpHeaders: headers,
+      formatHint: isHls ? VideoFormat.hls : null,
     );
 
     try {

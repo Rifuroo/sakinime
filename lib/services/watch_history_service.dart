@@ -245,6 +245,43 @@ class WatchHistoryService {
     }
   }
 
+  /// Migrate old title-based animeId to correct slug/ID
+  static Future<void> migrateAnimeId(String oldId, String newId) async {
+    if (oldId == newId) return;
+    try {
+      final history = await getWatchHistory();
+      bool changed = false;
+      
+      final updatedHistory = history.map((item) {
+        if (item.animeId == oldId) {
+          changed = true;
+          return WatchHistoryItem(
+            animeId: newId,
+            animeTitle: item.animeTitle,
+            animePoster: item.animePoster,
+            episodeId: item.episodeId,
+            episodeTitle: item.episodeTitle,
+            episodeNumber: item.episodeNumber,
+            watchedDuration: item.watchedDuration,
+            totalDuration: item.totalDuration,
+            lastWatched: item.lastWatched,
+            isCompleted: item.isCompleted,
+          );
+        }
+        return item;
+      }).toList();
+      
+      if (changed) {
+        final prefs = await SharedPreferences.getInstance();
+        final jsonList = updatedHistory.map((item) => item.toJson()).toList();
+        await prefs.setString(_historyKey, jsonEncode(jsonList));
+        if (kDebugMode) print('🔄 Migrated history: $oldId -> $newId');
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ Failed to migrate history: $e');
+    }
+  }
+
   /// Get watch statistics
   static Future<Map<String, dynamic>> getWatchStats() async {
     final history = await getWatchHistory();

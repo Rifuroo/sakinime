@@ -10,6 +10,10 @@ import '../widgets/search_screen.dart';
 import '../widgets/continue_watching_section.dart';
 import 'home_collection_screen.dart';
 import 'watch_history_screen.dart';
+import 'schedule_screen.dart';
+import 'watch2gether_screen.dart';
+import 'character_browser_screen.dart';
+import 'news_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -859,6 +863,159 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       color: Colors.white.withOpacity(0.05),
                       height: 1,
                     ),
+                    // Schedule Menu Item
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.calendar_month_rounded,
+                          color: Color(0xFF34D399),
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        'Anime Schedule',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white70,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const ScheduleScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(
+                      color: Colors.white.withOpacity(0.05),
+                      height: 1,
+                    ),
+                    // Watch2Gether Menu Item
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.groups_rounded,
+                          color: Color(0xFFFBBF24),
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        'Watch2Gether',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white70,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const Watch2GetherScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(
+                      color: Colors.white.withOpacity(0.05),
+                      height: 1,
+                    ),
+                    // Character Browser Menu Item
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.people_alt_rounded,
+                          color: Color(0xFFA78BFA),
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        'Characters',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white70,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CharacterBrowserScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(
+                      color: Colors.white.withOpacity(0.05),
+                      height: 1,
+                    ),
+                    // News Menu Item
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEC4899).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.newspaper_rounded,
+                          color: Color(0xFFF472B6),
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        'Anime News',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white70,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const NewsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
                     // Existing category items
                     Expanded(
                       child: ListView.separated(

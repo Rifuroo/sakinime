@@ -49,18 +49,26 @@ class SubtitleParserService {
   /// Ensure proper UTF-8 encoding for international characters
   static String _ensureUtf8(String content) {
     try {
-      // Try to decode as UTF-8 if it's not already properly decoded
-      final bytes = utf8.encode(content);
-      return utf8.decode(bytes, allowMalformed: true);
-    } catch (e) {
-      // If UTF-8 fails, try Latin-1 then convert to UTF-8
-      try {
-        final bytes = latin1.encode(content);
-        return utf8.decode(bytes, allowMalformed: true);
-      } catch (e2) {
-        // Return original if all else fails
-        return content;
+      // Check if content has mojibake (UTF-8 decoded as Latin-1)
+      // Common pattern: â, Ã, etc. appearing where they shouldn't
+      if (content.contains(RegExp(r'[ÃÂ][^a-zA-Z\s]'))) {
+        // Try to fix by re-encoding as Latin-1 then decoding as UTF-8
+        try {
+          final bytes = latin1.encode(content);
+          final fixed = utf8.decode(bytes, allowMalformed: false);
+          if (kDebugMode) print('✅ Fixed UTF-8 mojibake');
+          return fixed;
+        } catch (e) {
+          // If that fails, return original
+          if (kDebugMode) print('⚠️ Could not fix encoding, using original');
+        }
       }
+      
+      // Content is already properly encoded
+      return content;
+    } catch (e) {
+      if (kDebugMode) print('⚠️ Encoding check failed: $e');
+      return content;
     }
   }
 

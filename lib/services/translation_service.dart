@@ -26,6 +26,9 @@ class TranslationService {
     'it': 'Italiano',
     'nl': 'Nederlands',
     'tr': 'Türkçe',
+    'jv': 'Basa Jawa (Javanese)',
+    'su': 'Basa Sunda (Sundanese)',
+    'ms': 'Bahasa Melayu (Malay)',
   };
   
   // Cache for translated subtitles
@@ -38,6 +41,7 @@ class TranslationService {
   // Auto-disable AI if too many failures
   static int _consecutiveAIFailures = 0;
   static const int _maxAIFailures = 5;
+  // ignore: unused_field
   static bool _aiTemporarilyDisabled = false;
   
   /// Translate subtitle text to target language with AI styling
@@ -108,6 +112,7 @@ class TranslationService {
   }
   
   /// Enhance translation with AI styling
+  // ignore: unused_element
   static Future<String> _enhanceWithAI(String translatedText, String style) async {
     try {
       // Rate limiting: wait between AI calls
@@ -158,30 +163,37 @@ class TranslationService {
   
   /// Basic anime enhancement without AI (fallback)
   static String _basicAnimeEnhancement(String text) {
-    // Simple replacements for anime-style Indonesian
-    text = text.replaceAll('saya', 'aku');
-    text = text.replaceAll('Saya', 'Aku');
-    text = text.replaceAll('Anda', 'kamu');
-    text = text.replaceAll('anda', 'kamu');
-    text = text.replaceAll('tidak', 'gak');
-    text = text.replaceAll('Tidak', 'Gak');
-    text = text.replaceAll('bagaimana', 'gimana');
-    text = text.replaceAll('Bagaimana', 'Gimana');
-    text = text.replaceAll('kenapa', 'kok');
-    text = text.replaceAll('Kenapa', 'Kok');
-    text = text.replaceAll('mengapa', 'kenapa');
-    text = text.replaceAll('Mengapa', 'Kenapa');
-    text = text.replaceAll('apakah', 'apa');
-    text = text.replaceAll('Apakah', 'Apa');
-    text = text.replaceAll('seharusnya', 'harusnya');
-    text = text.replaceAll('Seharusnya', 'Harusnya');
-    text = text.replaceAll('seseorang', 'orang');
-    text = text.replaceAll('Seseorang', 'Orang');
-    text = text.replaceAll('sesuatu', 'sesuatu');
-    text = text.replaceAll('akan', 'bakal');
-    text = text.replaceAll('Akan', 'Bakal');
+    // Simple replacements for anime-style Indonesian using word boundaries
+    final Map<String, String> replacements = {
+      'saya': 'aku',
+      'Saya': 'Aku',
+      'Anda': 'kamu',
+      'anda': 'kamu',
+      'tidak': 'gak',
+      'Tidak': 'Gak',
+      'bagaimana': 'gimana',
+      'Bagaimana': 'Gimana',
+      'kenapa': 'kok',
+      'Kenapa': 'Kok',
+      'mengapa': 'kenapa',
+      'Mengapa': 'Kenapa',
+      'apakah': 'apa',
+      'Apakah': 'Apa',
+      'seharusnya': 'harusnya',
+      'Seharusnya': 'Harusnya',
+      'seseorang': 'orang',
+      'Seseorang': 'Orang',
+      'akan': 'bakal',
+      'Akan': 'Bakal',
+    };
+
+    String result = text;
+    replacements.forEach((key, value) {
+      // Use word boundaries \b to avoid replacing parts of words (like 'mengandalkan' -> 'mengkamulkan')
+      result = result.replaceAll(RegExp('\\b$key\\b', caseSensitive: false), value);
+    });
     
-    return text;
+    return result;
   }
   
   /// Build AI prompt for anime-style enhancement
@@ -240,7 +252,7 @@ class TranslationService {
       final model = models[i];
       try {
         if (kDebugMode && i > 0) {
-          print('🔄 Trying fallback model: $model');
+          debugPrint('🔄 Trying fallback model: $model');
         }
         
         final response = await http.post(
@@ -268,9 +280,9 @@ class TranslationService {
         );
         
         if (kDebugMode) {
-          print('🤖 Groq API Response ($model): ${response.statusCode}');
+          debugPrint('🤖 Groq API Response ($model): ${response.statusCode}');
           if (response.statusCode != 200) {
-            print('   Error body: ${response.body}');
+            debugPrint('   Error body: ${response.body}');
           }
         }
         
@@ -279,7 +291,7 @@ class TranslationService {
           if (data['choices'] != null && data['choices'].isNotEmpty) {
             final content = data['choices'][0]['message']['content'];
             if (kDebugMode && i > 0) {
-              print('✅ Success with fallback model: $model');
+              debugPrint('✅ Success with fallback model: $model');
             }
             return content.trim();
           }
@@ -431,19 +443,38 @@ class TranslationService {
   
 
   
-  /// Translate multiple subtitle texts in batch
+  /// Translate multiple subtitle texts in batch (Parallel)
   static Future<List<String>> translateBatch(
     List<String> texts, 
-    String targetLang,
-  ) async {
-    final List<String> results = [];
+    String targetLang, {
+    int batchSize = 10,
+  }) async {
+    if (texts.isEmpty) return [];
     
-    for (String text in texts) {
-      final translated = await translateText(text, targetLang);
-      results.add(translated);
+    final List<String> results = List.filled(texts.length, '');
+    
+    // Process in smaller chunks to avoid overwhelming APIs or rate limits
+    for (int i = 0; i < texts.length; i += batchSize) {
+      final end = (i + batchSize < texts.length) ? i + batchSize : texts.length;
+      final chunk = texts.sublist(i, end);
       
-      // Small delay to avoid rate limiting
-      await Future.delayed(const Duration(milliseconds: 100));
+      if (kDebugMode) {
+        print('📡 Translating batch chunk: ${i ~/ batchSize + 1} (${chunk.length} items)');
+      }
+      
+      // Parallel execution for this chunk
+      final translatedChunk = await Future.wait(
+        chunk.map((text) => translateText(text, targetLang))
+      );
+      
+      for (int j = 0; j < translatedChunk.length; j++) {
+        results[i + j] = translatedChunk[j];
+      }
+      
+      // Small cooldown between chunks if there are more
+      if (end < texts.length) {
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
     }
     
     return results;

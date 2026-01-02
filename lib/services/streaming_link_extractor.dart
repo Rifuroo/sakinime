@@ -1,7 +1,6 @@
 // services/streaming_link_extractor.dart - FIXED ANTI-BOT BYPASS
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:html/parser.dart' as html_parser;
 
 class StreamingLinkExtractor {
   static final Dio _dio = Dio(BaseOptions(

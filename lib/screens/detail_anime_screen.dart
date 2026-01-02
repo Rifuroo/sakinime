@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/anime_provider.dart';
 import '../models/anime_model.dart';
 import '../widgets/anime_video_player.dart';
+import 'character_detail_screen.dart';
+import 'character_browser_screen.dart';
 
 class DetailAnimeScreen extends StatefulWidget {
   final String animeId;
@@ -30,8 +32,8 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
   int _currentPage = 1;
 
   // ✅ Access to video player cache
-  static Map<String, List<dynamic>> get episodeCache => 
-      _DetailAnimeScreenState._internalCache;
+  // ignore: unused_element
+  static Map<String, List<dynamic>> get episodeCache => _internalCache;
   static final Map<String, List<dynamic>> _internalCache = {};
 
   @override
@@ -48,6 +50,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = Provider.of<AnimeProvider>(context, listen: false);
       provider.fetchAnimeDetail(widget.animeId);
+      provider.fetchCharacters(widget.animeId);
     });
     
     _scrollController.addListener(_onScroll);
@@ -134,14 +137,14 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
     if (!mounted) return;
 
     // ✅ Navigate immediately - let video player handle loading
-    final result = await Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => AnimeVideoPlayer(
           episodeToLoad: episode,
+          animeId: provider.currentAnime?.id ?? '',
           animeTitle: provider.currentAnime?.title ?? '',
           allEpisodes: provider.currentAnime?.episodes ?? [],
           animePoster: provider.currentAnime?.poster,
-          
         ),
       ),
     );
@@ -217,7 +220,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withOpacity(0.15),
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -278,7 +281,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                               side: BorderSide(
-                                color: Colors.white.withOpacity(0.1),
+                                color: Colors.white.withValues(alpha: 0.1),
                               ),
                             ),
                           ),
@@ -340,7 +343,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                   decoration: BoxDecoration(
                     color: _showTitle 
                         ? Colors.transparent 
-                        : Colors.black.withOpacity(0.5),
+                        : Colors.black.withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
@@ -394,9 +397,9 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withOpacity(0.2),
-                                Colors.black.withOpacity(0.5),
-                                const Color(0xFF0F0F0F).withOpacity(0.9),
+                                Colors.black.withValues(alpha: 0.2),
+                                Colors.black.withValues(alpha: 0.5),
+                                const Color(0xFF0F0F0F).withValues(alpha: 0.9),
                                 const Color(0xFF0F0F0F),
                               ],
                               stops: const [0.0, 0.5, 0.85, 1.0],
@@ -427,6 +430,11 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                       ),
                       const SizedBox(height: 20),
                       _buildInfoSection(anime),
+                      if (anime.genres != null && anime.genres!.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        _buildGenreSection(anime.genres!),
+                      ],
+                      _buildSyncDataSection(provider),
                       const SizedBox(height: 24),
                       Text(
                         'Synopsis',
@@ -439,6 +447,8 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                       ),
                       const SizedBox(height: 10),
                       _buildSynopsisSection(anime.synopsis),
+                      const SizedBox(height: 28),
+                      _buildCharacterSection(provider, anime.title),
                       const SizedBox(height: 28),
                       Row(
                         children: [
@@ -458,10 +468,10 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF6366F1).withOpacity(0.15),
+                              color: const Color(0xFF6366F1).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                color: const Color(0xFF6366F1).withOpacity(0.3),
+                                color: const Color(0xFF6366F1).withValues(alpha: 0.3),
                               ),
                             ),
                             child: Text(
@@ -499,7 +509,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                       children: [
                         Icon(
                           Icons.search_off_rounded,
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                           size: 42,
                         ),
                         const SizedBox(height: 12),
@@ -599,13 +609,13 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.white.withValues(alpha: 0.08),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: Colors.white.withOpacity(0.06),
+            color: Colors.white.withValues(alpha: 0.06),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -675,7 +685,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: Colors.white.withOpacity(0.08),
+          color: Colors.white.withValues(alpha: 0.08),
         ),
       ),
       child: Column(
@@ -765,13 +775,261 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
     );
   }
 
+  Widget _buildGenreSection(List<String> genres) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Genres',
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: genres.map((genre) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                ),
+              ),
+              child: Text(
+                genre,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF818CF8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCharacterSection(AnimeProvider provider, String animeTitle) {
+    if (provider.isLoadingCharacters && provider.characters.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (provider.characters.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text(
+          'No character information available for this anime.',
+          style: GoogleFonts.inter(fontSize: 13, color: Colors.white38),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(
+          title: 'Characters',
+          trailing: GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => CharacterBrowserScreen(
+                    animeId: widget.animeId,
+                    animeTitle: animeTitle,
+                  ),
+                ),
+              );
+            },
+            child: Text(
+              'View All',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF818CF8),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: provider.characters.length > 10 ? 10 : provider.characters.length,
+            itemBuilder: (context, index) {
+              return _buildCharacterCard(provider.characters[index]);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCharacterCard(Map<String, dynamic> character) {
+    final name = character['name'] ?? 'Unknown';
+    final String? image = character['imageUrl'] ?? character['image'] ?? character['poster'] ?? character['img'] ?? character['thumbnail'];
+    final id = character['id'];
+    final role = character['role'];
+
+    return GestureDetector(
+      onTap: () {
+        if (id != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => CharacterDetailScreen(
+                characterId: id,
+                characterName: name,
+              ),
+            ),
+          );
+        }
+      },
+      child: Container(
+        width: 100,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: image != null
+                    ? CachedNetworkImage(
+                        imageUrl: image,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorWidget: (context, url, error) => Container(
+                          color: const Color(0xFF1E293B),
+                          child: const Icon(Icons.person, color: Color(0xFF475569)),
+                        ),
+                      )
+                    : Container(
+                        color: const Color(0xFF1E293B),
+                        child: const Icon(Icons.person, color: Color(0xFF475569)),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              name,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (role != null)
+              Text(
+                role,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: const Color(0xFF818CF8),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSyncDataSection(AnimeProvider provider) {
+    if (provider.isSyncDataLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6366F1)),
+        ),
+      );
+    }
+
+    final syncData = provider.syncData;
+    if (syncData == null || (syncData['mal_id'] == null && syncData['anilist_id'] == null)) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        Text(
+          'External Links',
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            if (syncData['mal_id'] != null)
+              _buildExternalLinkChip(
+                'MyAnimeList',
+                'https://myanimelist.net/anime/${syncData['mal_id']}',
+                const Color(0xFF2E51A2),
+              ),
+            if (syncData['mal_id'] != null && syncData['anilist_id'] != null)
+              const SizedBox(width: 10),
+            if (syncData['anilist_id'] != null)
+              _buildExternalLinkChip(
+                'AniList',
+                'https://anilist.co/anime/${syncData['anilist_id']}',
+                const Color(0xFF02A9FF),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExternalLinkChip(String label, String url, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.link_rounded, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEpisodeCard(Episode episode, String episodeNum) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: Colors.white.withOpacity(0.08),
+          color: Colors.white.withValues(alpha: 0.08),
         ),
       ),
       child: Material(
@@ -788,7 +1046,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                   width: 32, // ✅ Reduced from 36
                   height: 32,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -821,8 +1079,35 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
   }
   
   // ✅ Check if episode is cached
+  // ignore: unused_element
   bool _isEpisodeCached(String episodeUrl) {
-    // This will be synced with video player cache
-    return _internalCache.containsKey(episodeUrl);
+    return _internalCache.containsKey(widget.animeId) && 
+           _internalCache[widget.animeId]!.contains(episodeUrl);
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final Widget? trailing;
+
+  const _SectionTitle({required this.title, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: -0.3,
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
+    );
   }
 }

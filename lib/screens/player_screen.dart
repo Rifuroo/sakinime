@@ -146,7 +146,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: const [
-                      Text('Subtitle belum terintegrasi di Chewie. (HLS + kualitas manual sudah tersedia).'),
+                      const Text('Subtitle overlay now displayed on video, including translation indicator.'),
                     ],
                   ),
                 ),
