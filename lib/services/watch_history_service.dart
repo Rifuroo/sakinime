@@ -105,9 +105,8 @@ class WatchHistoryService {
       final prefs = await SharedPreferences.getInstance();
       final historyList = await getWatchHistory();
       
-      // Remove existing entry for this episode
-      historyList.removeWhere((item) => 
-        item.animeId == animeId && item.episodeId == episodeId);
+      // Remove all existing entries for this anime to keep history grouped by anime
+      historyList.removeWhere((item) => item.animeId == animeId);
       
       // Create new history item
       final historyItem = WatchHistoryItem(
@@ -316,8 +315,8 @@ class WatchHistoryService {
     required Duration currentPosition,
     required Duration totalDuration,
   }) async {
-    // Only save if watched for at least 30 seconds and not at the very end
-    if (currentPosition.inSeconds < 30 || 
+    // Only save if watched for at least 5 seconds and not at the very end
+    if (currentPosition.inSeconds < 5 || 
         currentPosition.inMilliseconds >= totalDuration.inMilliseconds * 0.98) {
       return;
     }

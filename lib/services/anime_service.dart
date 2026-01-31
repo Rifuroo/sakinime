@@ -4,11 +4,14 @@ import 'package:flutter/foundation.dart';
 import '../models/anime_model.dart';
 
 class AnimeService {
-  // ✅ NEW API BASE URL
-  final String baseUrl = 'https://hianime-api.joas77055.workers.dev/api/v1';
-  late Dio _dio;
+  static final AnimeService _instance = AnimeService._internal();
+  factory AnimeService() => _instance;
 
-  AnimeService() {
+  // ✅ NEW API BASE URL
+  final String baseUrl = 'https://api.animo.qzz.io/api/v1';
+  late final Dio _dio;
+
+  AnimeService._internal() {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 60),
@@ -486,17 +489,24 @@ class AnimeService {
       if (cleanId.startsWith('/')) cleanId = cleanId.substring(1);
       if (cleanId.endsWith('/')) cleanId = cleanId.substring(0, cleanId.length - 1);
       
-      final response = await _dio.get('/anime/$cleanId');
-      if (response.statusCode != 200) return null;
+      // Fetch both info and episodes in parallel for speed
+      final results = await Future.wait([
+        _dio.get('/anime/$cleanId'),
+        _dio.get('/episodes/$cleanId'),
+      ]);
+      
+      final infoResponse = results[0];
+      final episodesResponse = results[1];
 
-      final data = response.data;
+      if (infoResponse.statusCode != 200) return null;
+
+      final data = infoResponse.data;
       if (data is Map && data['success'] == true && data['data'] is Map) {
         final animeData = Map<String, dynamic>.from(data['data']);
         
         if (kDebugMode) print('📊 Anime detail keys: ${animeData.keys.toList()}');
         
-        // Fetch episodes separately
-        final episodesResponse = await _dio.get('/episodes/$cleanId');
+        // Parse episodes from the parallel response
         if (episodesResponse.statusCode == 200) {
           final epData = episodesResponse.data;
           if (epData is Map && epData['success'] == true && epData['data'] is List) {
@@ -594,6 +604,11 @@ class AnimeService {
       if (response.statusCode == 200) {
         final data = response.data;
         if (data is Map && data['success'] == true && data['data'] is Map) {
+          final innerData = data['data'];
+          if (innerData is Map && innerData['success'] == true && innerData['data'] is Map) {
+            if (kDebugMode) print('✅ Schedule loaded (double-nested)');
+            return Map<String, dynamic>.from(innerData['data']);
+          }
           if (kDebugMode) print('✅ Schedule loaded');
           return Map<String, dynamic>.from(data['data']);
         }

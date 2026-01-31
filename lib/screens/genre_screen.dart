@@ -1,12 +1,12 @@
-// screens/genre_screen.dart - Modern UI with Pagination
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:math' as math;
 import '../providers/anime_provider.dart';
 import '../widgets/anime_card.dart';
 import '../widgets/loading_shimmer.dart';
+import '../constants/app_colors.dart';
+import 'dart:math' as math;
 
 class GenreScreen extends StatefulWidget {
   const GenreScreen({super.key});
@@ -122,8 +122,8 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                const Color(0xFF6366F1).withOpacity(0.12),
-                                const Color(0xFF8B5CF6).withOpacity(0.08),
+                                AppColors.primary.withValues(alpha: 0.12),
+                                const Color(0xFF8B5CF6).withValues(alpha: 0.08),
                                 const Color(0xFF0A0A0A),
                               ],
                               stops: const [0.0, 0.5, 1.0],
@@ -141,8 +141,8 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  const Color(0xFF818CF8).withOpacity(0.2),
-                                  const Color(0xFF6366F1).withOpacity(0.1),
+                                  AppColors.primary.withValues(alpha: 0.2),
+                                  AppColors.primary.withValues(alpha: 0.1),
                                   Colors.transparent,
                                 ],
                               ),
@@ -162,14 +162,14 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
                                         colors: [
-                                          Color(0xFF6366F1),
-                                          Color(0xFF818CF8),
+                                          AppColors.primary,
+                                          AppColors.primary,
                                         ],
                                       ),
                                       borderRadius: BorderRadius.circular(14),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF6366F1).withOpacity(0.4),
+                                          color: AppColors.primary.withValues(alpha: 0.4),
                                           blurRadius: 16,
                                           offset: const Offset(0, 6),
                                         ),
@@ -225,7 +225,7 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                     const SliverFillRemaining(
                       child: Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFF818CF8),
+                          color: AppColors.primary,
                         ),
                       ),
                     )
@@ -236,10 +236,10 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                         child: Container(
                           height: 80,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0A0A0A).withOpacity(0.8),
+                            color: const Color(0xFF0A0A0A).withValues(alpha: 0.8),
                             border: Border(
                               bottom: BorderSide(
-                                color: const Color(0xFF1E293B).withOpacity(0.5),
+                                color: const Color(0xFF1E293B).withValues(alpha: 0.5),
                                 width: 1,
                               ),
                             ),
@@ -247,7 +247,7 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                           child: ClipRRect(
                             child: BackdropFilter(
                               filter: ColorFilter.mode(
-                                Colors.black.withOpacity(0.2),
+                                Colors.black.withValues(alpha: 0.2),
                                 BlendMode.darken,
                               ),
                               child: ListView.builder(
@@ -269,11 +269,11 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                                         duration: const Duration(milliseconds: 200),
                                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                         decoration: BoxDecoration(
-                                          gradient: isSelected ? const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]) : null,
+                                          gradient: isSelected ? const LinearGradient(colors: [AppColors.primary, Color(0xFF8B5CF6)]) : null,
                                           color: isSelected ? null : const Color(0xFF1E293B),
                                           borderRadius: BorderRadius.circular(14),
                                           border: Border.all(
-                                            color: isSelected ? const Color(0xFF818CF8) : const Color(0xFF334155),
+                                            color: isSelected ? AppColors.primary : const Color(0xFF334155),
                                             width: 1.5,
                                           ),
                                         ),
@@ -352,9 +352,9 @@ class _GenreScreenState extends State<GenreScreen> with TickerProviderStateMixin
                           child: Padding(
                             padding: const EdgeInsets.all(20),
                             child: provider.isLoadingMore
-                                ? const Center(child: CircularProgressIndicator(color: Color(0xFF818CF8)))
+                                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                                 : !provider.hasMorePages
-                                    ? Center(child: Text('All anime loaded', style: GoogleFonts.poppins(color: const Color(0xFF818CF8))))
+                                    ? Center(child: Text('All anime loaded', style: GoogleFonts.poppins(color: AppColors.primary)))
                                     : const SizedBox(),
                           ),
                         ),
@@ -415,7 +415,7 @@ class LoadingCard extends StatelessWidget {
           height: 32,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: const Color(0xFF818CF8),
+            color: AppColors.primary,
           ),
         ),
       ),
@@ -448,7 +448,7 @@ class StarfieldPainter extends CustomPainter {
       final twinkle = (math.sin(animation * math.pi * 2 * star.speed) + 1) / 2;
       final opacity = star.opacity * twinkle * 0.4;
       
-      paint.color = const Color(0xFF818CF8).withOpacity(opacity);
+      paint.color = AppColors.primary.withValues(alpha: opacity);
       
       final x = star.x * size.width;
       final y = star.y * size.height;
@@ -456,7 +456,7 @@ class StarfieldPainter extends CustomPainter {
       canvas.drawCircle(Offset(x, y), star.size, paint);
       
       if (star.size > 1.5) {
-        paint.color = const Color(0xFF6366F1).withOpacity(opacity * 0.6);
+        paint.color = AppColors.primary.withValues(alpha: opacity * 0.6);
         canvas.drawLine(
           Offset(x - star.size * 2, y),
           Offset(x + star.size * 2, y),
@@ -490,3 +490,4 @@ class Star {
     required this.opacity,
   });
 }
+

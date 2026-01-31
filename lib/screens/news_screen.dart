@@ -1,11 +1,13 @@
 // screens/news_screen.dart - News Screen
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import '../providers/anime_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../providers/anime_provider.dart';
+import '../constants/app_colors.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -68,7 +70,7 @@ class _NewsScreenState extends State<NewsScreen> {
           if (provider.isLoadingNews && provider.news.isEmpty) {
             return const Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF818CF8)),
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             );
           }
@@ -139,7 +141,7 @@ class _NewsScreenState extends State<NewsScreen> {
           color: const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF334155).withOpacity(0.5),
+            color: const Color(0xFF334155).withValues(alpha: 0.5),
           ),
         ),
         child: Column(
@@ -166,7 +168,7 @@ class _NewsScreenState extends State<NewsScreen> {
                       date,
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: const Color(0xFF818CF8),
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -203,3 +205,4 @@ class _NewsScreenState extends State<NewsScreen> {
     );
   }
 }
+

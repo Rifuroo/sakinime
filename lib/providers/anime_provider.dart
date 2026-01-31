@@ -1,8 +1,11 @@
-// providers/anime_provider.dart - WITH PAGINATION SUPPORT
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/anime_model.dart';
 import '../services/anime_service.dart';
+import '../services/bookmark_service.dart';
 
 enum HomeSidebarCategory { movies, ona, ova, specials, tv }
 
@@ -82,6 +85,7 @@ class AnimeProvider extends ChangeNotifier {
   List<Anime> homeTopAiring = [];
   List<Anime> homeMostPopular = [];
   List<Anime> homeMostFavorite = [];
+  List<Anime> bookmarkedAnimes = [];
   final Map<HomeSidebarCategory, List<Anime>> sidebarCollections = {
     for (final category in HomeSidebarCategory.values) category: <Anime>[],
   };
@@ -95,7 +99,7 @@ class AnimeProvider extends ChangeNotifier {
   String? errorMessage;
   String? homeSectionsError;
   String? sidebarErrorMessage;
-  List<Map<String, dynamic>> characters = [];
+  List<Character> characters = [];
   List<Map<String, dynamic>> news = [];
   bool isLoadingCharacters = false;
   bool isLoadingNews = false;
@@ -121,6 +125,7 @@ class AnimeProvider extends ChangeNotifier {
   // Search
   Timer? _searchDebounce;
   String _lastSearchQuery = '';
+  final Map<HomeSidebarCategory, Timer> _sidebarCollectionTimers = {};
 
   // HOME
   Future<void> fetchHome() async {
@@ -145,26 +150,75 @@ class AnimeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // LATEST ANIMES
+  // ✅ DYNAMIC THEME
+  Color _primaryColor = const Color(0xFF6366F1);
+  Color get primaryColor => _primaryColor;
+
+  Future<void> setPrimaryColor(Color color) async {
+    _primaryColor = color;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('app_theme_color', color.toARGB32());
+    HapticFeedback.mediumImpact();
+  }
+
+  Future<void> loadThemeColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final colorValue = prefs.getInt('app_theme_color');
+    if (colorValue != null) {
+      _primaryColor = Color(colorValue);
+      notifyListeners();
+    }
+  }
+
+  // LATEST ANIMES - Progressive Loading (Top to Bottom)
   Future<void> fetchHomeSections() async {
     isHomeSectionsLoading = true;
     homeSectionsError = null;
     notifyListeners();
 
     try {
-      final results = await Future.wait([
-        _service.getRecentAnime(page: 1),
-        _service.getRecentAdded(page: 1),
-        _service.getTopAiring(page: 1),
-        _service.getPopularAnime(page: 1),
-        _service.getMostFavorite(page: 1),
-      ]);
-
-      homeRecentEpisodes = results[0];
-      homeRecentAdded = results[1];
-      homeTopAiring = results[2];
-      homeMostPopular = results[3];
-      homeMostFavorite = results[4];
+      // Load sequentially from top to bottom of layout for better perceived performance
+      
+      // 1. Most Favorite (for Hero Banner - highest priority)
+      try {
+        homeMostFavorite = await _service.getMostFavorite(page: 1);
+        notifyListeners(); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load Most Favorite: $e');
+      }
+      
+      // 2. Recent Episodes (Latest Episodes section)
+      try {
+        homeRecentEpisodes = await _service.getRecentAnime(page: 1);
+        notifyListeners(); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load Recent Episodes: $e');
+      }
+      
+      // 3. Top Airing (Trending Now section)
+      try {
+        homeTopAiring = await _service.getTopAiring(page: 1);
+        notifyListeners(); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load Top Airing: $e');
+      }
+      
+      // 4. Recent Added (New Added section)
+      try {
+        homeRecentAdded = await _service.getRecentAdded(page: 1);
+        notifyListeners(); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load Recent Added: $e');
+      }
+      
+      // 5. Most Popular (last section)
+      try {
+        homeMostPopular = await _service.getPopularAnime(page: 1);
+        notifyListeners(); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load Most Popular: $e');
+      }
 
       if (homeRecentEpisodes.isEmpty &&
           homeRecentAdded.isEmpty &&
@@ -622,8 +676,7 @@ class AnimeProvider extends ChangeNotifier {
       schedules = {};
       
       // Safely parse the schedule data
-      if (data is Map) {
-        data.forEach((key, value) {
+      data.forEach((key, value) {
           try {
             if (value is List) {
               final list = value.map((i) {
@@ -641,7 +694,6 @@ class AnimeProvider extends ChangeNotifier {
             if (kDebugMode) print('⚠️ Error parsing schedule for $key: $e');
           }
         });
-      }
       
       if (schedules.isEmpty) {
         errorMessage = 'Jadwal tidak ditemukan';
@@ -653,6 +705,26 @@ class AnimeProvider extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  // SURPRISE ME (Randomizer)
+  Future<Anime?> fetchRandomAnime() async {
+    try {
+      HapticFeedback.heavyImpact();
+      // Fetch most popular list (usually has many items)
+      if (homeMostPopular.isEmpty) {
+        await fetchHome();
+      }
+      
+      final list = homeMostPopular.isNotEmpty ? homeMostPopular : popularAnimes;
+      if (list.isNotEmpty) {
+        final random = DateTime.now().millisecond % list.length;
+        return list[random];
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ Error in Surprise Me: $e');
+    }
+    return null;
   }
 
   // WATCH2GETHER
@@ -908,13 +980,13 @@ class AnimeProvider extends ChangeNotifier {
   String get lastSearchQuery => _lastSearchQuery;
 
   void clearSearchResults() {
-  searchResults = [];
-  _lastSearchQuery = '';
-  errorMessage = null;
-  currentPage = 1;
-  hasMorePages = true;
-  notifyListeners();
-}
+    searchResults = [];
+    _lastSearchQuery = '';
+    errorMessage = null;
+    currentPage = 1;
+    hasMorePages = true;
+    notifyListeners();
+  }
 
   // CHARACTERS
   Future<void> fetchCharacters(String animeId, {int page = 1}) async {
@@ -930,10 +1002,13 @@ class AnimeProvider extends ChangeNotifier {
     try {
       final result = await _service.getCharacters(animeId, page: page);
       if (kDebugMode) print('👥 Provider.fetchCharacters result: ${result.length} items for $animeId');
+      
+      final mappedChars = result.map((c) => Character.fromJson(c)).toList();
+
       if (page == 1) {
-        characters = result;
+        characters = mappedChars;
       } else {
-        characters.addAll(result);
+        characters.addAll(mappedChars);
       }
       hasMoreCharacters = result.length >= 10;
     } catch (e) {
@@ -1014,9 +1089,30 @@ class AnimeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ✅ Bookmarks
+  Future<void> fetchBookmarks() async {
+    bookmarkedAnimes = await BookmarkService.getBookmarks();
+    notifyListeners();
+  }
+
+  Future<void> toggleBookmark(Anime anime) async {
+    final exists = bookmarkedAnimes.any((item) => item.id == anime.id);
+    if (exists) {
+      await BookmarkService.removeBookmark(anime.id);
+    } else {
+      await BookmarkService.addBookmark(anime);
+    }
+    await fetchBookmarks();
+  }
+
+  bool isBookmarked(String animeId) {
+    return bookmarkedAnimes.any((item) => item.id == animeId);
+  }
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _sidebarCollectionTimers.values.forEach((timer) => timer.cancel());
     super.dispose();
   }
 }

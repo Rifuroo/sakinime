@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/anime_model.dart';
 import '../providers/anime_provider.dart';
 import '../widgets/anime_card.dart';
+import '../constants/app_colors.dart';
 
 class HomeCollectionScreen extends StatefulWidget {
   final HomeCollectionType type;
@@ -103,21 +104,21 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF05060F),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _onRefresh,
-          color: const Color(0xFF818CF8),
-          backgroundColor: const Color(0xFF1A1A2E),
+          color: AppColors.primary,
+          backgroundColor: AppColors.cardBg,
           child: CustomScrollView(
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverAppBar(
                 pinned: true,
-                backgroundColor: const Color(0xFF05060F),
+                backgroundColor: AppColors.background,
                 elevation: 4,
-                shadowColor: Colors.black.withOpacity(0.4),
+                shadowColor: Colors.black.withValues(alpha: 0.4),
                 toolbarHeight: 72,
                 title: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,12 +162,12 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                       borderRadius: BorderRadius.circular(16),
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFFEF4444).withOpacity(0.1),
-                          const Color(0xFF991B1B).withOpacity(0.1),
+                          const Color(0xFFEF4444).withValues(alpha: 0.1),
+                          const Color(0xFF991B1B).withValues(alpha: 0.1),
                         ],
                       ),
                       border: Border.all(
-                        color: const Color(0xFFEF4444).withOpacity(0.3),
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -194,7 +195,7 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                 const SliverFillRemaining(
                   child: Center(
                     child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF818CF8)),
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                     ),
                   ),
                 )
@@ -207,7 +208,7 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                         Icon(
                           Icons.inbox_outlined,
                           size: 48,
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -252,7 +253,7 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                     child: _isLoadingMore
                         ? const CircularProgressIndicator(
                             strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF818CF8)),
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                           )
                         : _hasMore
                             ? ElevatedButton(

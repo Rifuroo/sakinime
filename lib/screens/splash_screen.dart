@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:math' as math;
 import 'dart:ui';
+import '../constants/app_colors.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -100,9 +101,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF0a0e27),
-              const Color(0xFF1a1f3a),
-              const Color(0xFF2d1b4e),
+              AppColors.background, // Main background
+              AppColors.cardBg, // Card background
+              AppColors.background, // Back to main
             ],
           ),
         ),
@@ -155,12 +156,12 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.deepPurple.withOpacity(0.6),
+                                color: AppColors.primary.withValues(alpha: 0.4),
                                 blurRadius: 80,
                                 spreadRadius: 30,
                               ),
                               BoxShadow(
-                                color: Colors.purpleAccent.withOpacity(0.4),
+                                color: AppColors.primary.withValues(alpha: 0.2),
                                 blurRadius: 120,
                                 spreadRadius: 20,
                               ),
@@ -186,11 +187,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 begin: Alignment(_shimmerAnimation.value - 1, 0),
                                 end: Alignment(_shimmerAnimation.value + 1, 0),
                                 colors: [
-                                  Colors.white.withOpacity(0.3),
+                                  Colors.white.withValues(alpha: 0.3),
                                   Colors.white,
-                                  Colors.purpleAccent,
+                                  AppColors.primary, // Amber accent
                                   Colors.white,
-                                  Colors.white.withOpacity(0.3),
+                                  Colors.white.withValues(alpha: 0.3),
                                 ],
                                 stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
                               ).createShader(bounds),
@@ -218,7 +219,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(25),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               width: 1.5,
                             ),
                           ),
@@ -230,15 +231,15 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      Colors.white.withOpacity(0.15),
-                                      Colors.white.withOpacity(0.05),
+                                      Colors.white.withValues(alpha: 0.15),
+                                      Colors.white.withValues(alpha: 0.05),
                                     ],
                                   ),
                                 ),
                                 child: Text(
                                   'Stream Your Favorite Anime',
                                   style: GoogleFonts.poppins(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 1.2,
@@ -263,7 +264,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   height: 6,
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(10),
-                                    color: Colors.white.withOpacity(0.1),
+                                    color: Colors.white.withValues(alpha: 0.1),
                                   ),
                                   child: Stack(
                                     children: [
@@ -273,16 +274,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                         child: Container(
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(10),
-                                            gradient: LinearGradient(
+                                            gradient: const LinearGradient(
                                               colors: [
-                                                Colors.deepPurple,
-                                                Colors.purpleAccent,
-                                                Colors.pinkAccent,
+                                                AppColors.primary, // Amber
+                                                Color(0xFFFBBF24), // Light amber
+                                                AppColors.primary, // Amber
                                               ],
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.purpleAccent.withOpacity(0.6),
+                                                color: AppColors.primary.withValues(alpha: 0.6),
                                                 blurRadius: 15,
                                                 spreadRadius: 2,
                                               ),
@@ -302,7 +303,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                               gradient: LinearGradient(
                                                 colors: [
                                                   Colors.transparent,
-                                                  Colors.white.withOpacity(0.6),
+                                                  Colors.white.withValues(alpha: 0.6),
                                                   Colors.transparent,
                                                 ],
                                               ),
@@ -319,7 +320,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                 Text(
                                   _getLoadingText(_progressAnimation.value),
                                   style: GoogleFonts.poppins(
-                                    color: Colors.white.withOpacity(0.7),
+                                    color: Colors.white.withValues(alpha: 0.7),
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
                                     letterSpacing: 0.5,
@@ -352,7 +353,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                       ),
                     ),
                     child: ClipRRect(
@@ -363,8 +364,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                Colors.white.withOpacity(0.1),
-                                Colors.white.withOpacity(0.05),
+                                Colors.white.withValues(alpha: 0.1),
+                                Colors.white.withValues(alpha: 0.05),
                               ],
                             ),
                           ),
@@ -374,13 +375,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                               Icon(
                                 Icons.copyright_rounded,
                                 size: 14,
-                                color: Colors.white.withOpacity(0.6),
+                                color: Colors.white.withValues(alpha: 0.6),
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 '2025 Riplo',
                                 style: GoogleFonts.poppins(
-                                  color: Colors.white.withOpacity(0.6),
+                                  color: Colors.white.withValues(alpha: 0.6),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -426,13 +427,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      Colors.purpleAccent.withOpacity(0.8),
+                      AppColors.primary.withValues(alpha: 0.8),
                       Colors.transparent,
                     ],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.purpleAccent.withOpacity(0.5),
+                      color: AppColors.primary.withValues(alpha: 0.5),
                       blurRadius: 8,
                     ),
                   ],
@@ -469,9 +470,9 @@ class GradientOrbsPainter extends CustomPainter {
       final paint = Paint()
         ..shader = RadialGradient(
           colors: [
-            i == 0 ? Colors.deepPurple.withOpacity(0.2) :
-            i == 1 ? Colors.purple.withOpacity(0.15) :
-            Colors.pinkAccent.withOpacity(0.12),
+            i == 0 ? AppColors.primary.withValues(alpha: 0.15) :
+            i == 1 ? const Color(0xFFFBBF24).withValues(alpha: 0.12) :
+            AppColors.primary.withValues(alpha: 0.1),
             Colors.transparent,
           ],
         ).createShader(Rect.fromCircle(
@@ -502,10 +503,10 @@ class GlassRingsPainter extends CustomPainter {
         ..strokeWidth = 1.5
         ..shader = SweepGradient(
           colors: [
-            Colors.deepPurple.withOpacity(0.15),
-            Colors.purpleAccent.withOpacity(0.2),
-            Colors.pinkAccent.withOpacity(0.15),
-            Colors.deepPurple.withOpacity(0.15),
+            AppColors.primary.withValues(alpha: 0.15),
+            const Color(0xFFFBBF24).withValues(alpha: 0.2),
+            AppColors.primary.withValues(alpha: 0.15),
+            const Color(0xFFFBBF24).withValues(alpha: 0.1),
           ],
           transform: GradientRotation(animation * 2 * math.pi),
         ).createShader(Rect.fromCircle(center: center, radius: radius));

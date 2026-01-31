@@ -1,9 +1,10 @@
-// screens/character_browser_screen.dart - Character Browser Screen
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:provider/provider.dart';
 import '../providers/anime_provider.dart';
+import '../models/anime_model.dart';
+import '../constants/app_colors.dart';
 import 'character_detail_screen.dart';
 
 class CharacterBrowserScreen extends StatefulWidget {
@@ -123,11 +124,11 @@ class _CharacterBrowserScreenState extends State<CharacterBrowserScreen> {
     );
   }
 
-  Widget _buildCharacterCard(Map<String, dynamic> character) {
-    final String name = character['name'] ?? 'Unknown';
-    final String? image = character['imageUrl'] ?? character['image'] ?? character['poster'] ?? character['img'] ?? character['thumbnail'];
-    final String? id = character['id'];
-    final String? role = character['role'];
+  Widget _buildCharacterCard(Character character) {
+    final String name = character.name;
+    final String? image = character.image;
+    final String? id = character.id;
+    final String? role = character.role;
 
     return GestureDetector(
       onTap: () {
@@ -180,7 +181,7 @@ class _CharacterBrowserScreenState extends State<CharacterBrowserScreen> {
               role,
               style: GoogleFonts.inter(
                 fontSize: 10,
-                color: const Color(0xFF818CF8),
+                color: AppColors.primary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -191,3 +192,4 @@ class _CharacterBrowserScreenState extends State<CharacterBrowserScreen> {
     );
   }
 }
+

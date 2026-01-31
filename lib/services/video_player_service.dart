@@ -21,7 +21,7 @@ class VideoPlayerService {
     VideoPlayerController? controller;
 
     // Check if this is an HLS stream for Android ExoPlayer format hint
-    final isHls = streamLink.type?.toLowerCase() == 'hls' ||
+    final isHls = streamLink.type.toLowerCase() == 'hls' ||
                   streamLink.url.toLowerCase().contains('.m3u8');
 
     try {

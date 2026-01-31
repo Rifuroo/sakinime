@@ -1,7 +1,7 @@
-// widgets/loading_shimmer.dart - Modern Loading UI
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
+import '../constants/app_colors.dart';
 
 class LoadingShimmer extends StatelessWidget {
   final String? message;
@@ -39,9 +39,9 @@ class LoadingShimmer extends StatelessWidget {
           SizedBox(
             width: 160,
             child: LinearProgressIndicator(
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
               valueColor: const AlwaysStoppedAnimation<Color>(
-                Color(0xFF6366F1),
+                AppColors.primary,
               ),
               minHeight: 2,
             ),
@@ -62,7 +62,7 @@ class LoadingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         color: const Color(0xFF1A1A1A),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
         ),
       ),
       child: Center(
@@ -71,7 +71,7 @@ class LoadingCard extends StatelessWidget {
           height: 32,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: const Color(0xFF6366F1),
+            color: AppColors.primary,
           ),
         ),
       ),
@@ -116,3 +116,4 @@ class MiniLoading extends StatelessWidget {
     );
   }
 }
+

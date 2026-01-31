@@ -17,7 +17,7 @@ class AIConfig {
   static const String huggingFaceBaseUrl = 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium';
   
   // Configuration
-  static const bool useAI = false; // Set to false to disable AI enhancement
+  static const bool useAI = true; // Set to false to disable AI enhancement
   static const String preferredProvider = 'groq'; // 'groq', 'openai', 'ollama', 'huggingface', 'cohere'
   
   // Cohere API (Free tier: 1000 requests/month)

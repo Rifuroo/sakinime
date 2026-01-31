@@ -1,4 +1,5 @@
 // screens/watch_history_screen.dart - Watch History Screen
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,6 +8,7 @@ import '../services/watch_history_service.dart';
 import '../services/anime_service.dart';
 import '../widgets/anime_video_player.dart';
 import '../models/anime_model.dart';
+import '../constants/app_colors.dart';
 
 
 class WatchHistoryScreen extends StatefulWidget {
@@ -41,21 +43,42 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
     setState(() => _isLoading = true);
     
     try {
-      final results = await Future.wait([
-        WatchHistoryService.getWatchHistory(),
-        WatchHistoryService.getContinueWatching(limit: 20),
-        WatchHistoryService.getRecentAnime(limit: 15),
-        WatchHistoryService.getWatchStats(),
-      ]);
+      // Progressive loading - load from top to bottom
+      
+      // 1. Watch Stats (shows first - small data)
+      try {
+        _watchStats = await WatchHistoryService.getWatchStats();
+        if (mounted) setState(() {}); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load watch stats: $e');
+      }
+      
+      // 2. Continue Watching (priority - user wants to resume)
+      try {
+        _continueWatching = await WatchHistoryService.getContinueWatching(limit: 20);
+        if (mounted) setState(() {}); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load continue watching: $e');
+      }
+      
+      // 3. Recent Anime (second tab)
+      try {
+        _recentAnime = await WatchHistoryService.getRecentAnime(limit: 15);
+        if (mounted) setState(() {}); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load recent anime: $e');
+      }
+      
+      // 4. All History (last - largest dataset)
+      try {
+        _allHistory = await WatchHistoryService.getWatchHistory();
+        if (mounted) setState(() {}); // Update UI immediately
+      } catch (e) {
+        if (kDebugMode) print('⚠️ Failed to load all history: $e');
+      }
       
       if (mounted) {
-        setState(() {
-          _allHistory = results[0] as List<WatchHistoryItem>;
-          _continueWatching = results[1] as List<WatchHistoryItem>;
-          _recentAnime = results[2] as List<WatchHistoryItem>;
-          _watchStats = results[3] as Map<String, dynamic>;
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       if (mounted) {
@@ -228,7 +251,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF6366F1),
+          indicatorColor: AppColors.primary,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white54,
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
@@ -264,7 +287,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Color(0xFF6366F1)),
+          CircularProgressIndicator(color: AppColors.primary),
           SizedBox(height: 16),
           Text(
             'Loading watch history...',
@@ -289,7 +312,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,12 +322,12 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.15),
+                  color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.analytics_outlined,
-                  color: Color(0xFF818CF8),
+                  color: AppColors.primary,
                   size: 20,
                 ),
               ),
@@ -360,7 +383,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
   Widget _buildStatItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Icon(icon, color: const Color(0xFF818CF8), size: 24),
+        Icon(icon, color: AppColors.primary, size: 24),
         const SizedBox(height: 8),
         Text(
           value,
@@ -457,7 +480,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -495,7 +518,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -519,14 +542,14 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                             imageUrl: item.animePoster!,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               child: const Icon(
                                 Icons.movie,
                                 color: Colors.white24,
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               child: const Icon(
                                 Icons.broken_image,
                                 color: Colors.white24,
@@ -534,7 +557,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                             ),
                           )
                         : Container(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             child: const Icon(
                               Icons.movie,
                               color: Colors.white24,
@@ -574,13 +597,13 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF6366F1).withOpacity(0.15),
+                              color: AppColors.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               'Episode ${item.episodeNumber}',
                               style: GoogleFonts.inter(
-                                color: const Color(0xFF818CF8),
+                                color: AppColors.primary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -591,7 +614,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.15),
+                                color: Colors.green.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -612,9 +635,9 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                             Expanded(
                               child: LinearProgressIndicator(
                                 value: item.progressPercentage,
-                                backgroundColor: Colors.white.withOpacity(0.1),
+                                backgroundColor: Colors.white.withValues(alpha: 0.1),
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  item.isCompleted ? Colors.green : const Color(0xFF6366F1),
+                                  item.isCompleted ? Colors.green : AppColors.primary,
                                 ),
                                 minHeight: 3,
                               ),
@@ -666,7 +689,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -690,14 +713,14 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                             imageUrl: item.animePoster!,
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               child: const Icon(
                                 Icons.movie,
                                 color: Colors.white24,
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               child: const Icon(
                                 Icons.broken_image,
                                 color: Colors.white24,
@@ -705,7 +728,7 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
                             ),
                           )
                         : Container(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             child: const Icon(
                               Icons.movie,
                               color: Colors.white24,
@@ -778,3 +801,4 @@ class _WatchHistoryScreenState extends State<WatchHistoryScreen> with SingleTick
     }
   }
 }
+

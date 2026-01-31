@@ -1,8 +1,8 @@
-// screens/character_detail_screen.dart - Character Detail Screen
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/anime_service.dart';
+import '../constants/app_colors.dart';
 import 'detail_anime_screen.dart';
 
 class CharacterDetailScreen extends StatefulWidget {
@@ -63,7 +63,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF818CF8)),
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             )
           : _errorMessage != null
@@ -89,7 +89,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                       ElevatedButton(
                         onPressed: _loadCharacterDetail,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6366F1),
+                          backgroundColor: AppColors.primary,
                         ),
                         child: const Text('Retry'),
                       ),
@@ -110,7 +110,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                             fontWeight: FontWeight.w700,
                             shadows: [
                               Shadow(
-                                color: Colors.black.withOpacity(0.8),
+                                color: Colors.black.withValues(alpha: 0.8),
                                 blurRadius: 8,
                               ),
                             ],
@@ -148,7 +148,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   end: Alignment.bottomCenter,
                                   colors: [
                                     Colors.transparent,
-                                    const Color(0xFF0A0A0A).withOpacity(0.7),
+                                    const Color(0xFF0A0A0A).withValues(alpha: 0.7),
                                     const Color(0xFF0A0A0A),
                                   ],
                                 ),
@@ -314,7 +314,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                                   anime['role'],
                                                   style: GoogleFonts.inter(
                                                     fontSize: 12,
-                                                    color: const Color(0xFF818CF8),
+                                                    color: AppColors.primary,
                                                   ),
                                                 ),
                                             ],
@@ -339,3 +339,4 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 }
+

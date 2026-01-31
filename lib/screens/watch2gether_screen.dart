@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/anime_provider.dart';
 import '../models/anime_model.dart';
+import '../constants/app_colors.dart';
 import 'detail_anime_screen.dart';
 
 class Watch2GetherScreen extends StatefulWidget {
@@ -60,7 +61,7 @@ class _Watch2GetherScreenState extends State<Watch2GetherScreen> {
             child: Consumer<AnimeProvider>(
               builder: (context, provider, child) {
                 if (provider.isLoading && provider.watch2GetherRooms.isEmpty) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)));
+                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
                 }
 
                 if (provider.watch2GetherRooms.isEmpty) {
@@ -123,7 +124,7 @@ class _Watch2GetherScreenState extends State<Watch2GetherScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF1E293B),
+                color: isSelected ? AppColors.primary : const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(25),
                 border: Border.all(
                   color: isSelected ? Colors.white24 : Colors.transparent,
@@ -160,7 +161,7 @@ class _Watch2GetherScreenState extends State<Watch2GetherScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -176,7 +177,7 @@ class _Watch2GetherScreenState extends State<Watch2GetherScreen> {
                         imageUrl: room.poster ?? '',
                         fit: BoxFit.cover,
                         errorWidget: (context, url, error) => Container(
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha: 0.05),
                           child: const Icon(Icons.broken_image, color: Colors.white24),
                         ),
                       ),
@@ -226,12 +227,12 @@ class _Watch2GetherScreenState extends State<Watch2GetherScreen> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.video_library_rounded, size: 12, color: const Color(0xFF818CF8)),
+                          Icon(Icons.video_library_rounded, size: 12, color: AppColors.primary),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               room.episode ?? 'N/A',
-                              style: TextStyle(color: const Color(0xFF818CF8), fontSize: 11, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -249,3 +250,4 @@ class _Watch2GetherScreenState extends State<Watch2GetherScreen> {
     );
   }
 }
+

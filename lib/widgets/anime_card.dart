@@ -1,291 +1,217 @@
-// widgets/anime_card.dart - Zoro Images
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/anime_model.dart';
 import '../screens/detail_anime_screen.dart';
+import '../constants/app_colors.dart';
+import 'package:shimmer/shimmer.dart';
+import 'anime_preview_dialog.dart';
 
-class AnimeCard extends StatelessWidget {
+class AnimeCard extends StatefulWidget {
   final Anime anime;
+  final double? width;
+  final VoidCallback? onTap;
 
-  const AnimeCard({super.key, required this.anime});
+  const AnimeCard({
+    super.key,
+    required this.anime,
+    this.width,
+    this.onTap,
+  });
 
-  static void clearCache() {
-    // No-op for compatibility
+  @override
+  State<AnimeCard> createState() => _AnimeCardState();
+}
+
+class _AnimeCardState extends State<AnimeCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100), // Fast press feel
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
-  bool _isValidPoster(String? url) {
-    return url != null && 
-           url.isNotEmpty && 
-           url.startsWith('http') &&
-           !url.contains('placehold.co') &&
-           !url.contains('placeholder');
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
-  Map<String, String> _getImageHeaders() {
-    return {
-      'Referer': 'https://hianime.to/',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    };
+  void _handlePressIn(TapDownDetails _) {
+    _controller.forward();
+  }
+
+  void _handlePressOut(TapUpDetails _) {
+    _controller.reverse();
+  }
+
+  void _handleCancel() {
+    _controller.reverse();
+  }
+
+  void _showPreview() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (context) => AnimePreviewDialog(anime: widget.anime),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final posterUrl = anime.poster;
-    final hasValidPoster = _isValidPoster(posterUrl);
+    // Using centralized AppColors
+    
+    // Width logic: default 140 if not provided
+    final cardWidth = widget.width ?? 140.0;
 
-    return GestureDetector(
-      onTap: () {
-        if (anime.id.isEmpty || anime.id.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Invalid anime ID',
-                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-              backgroundColor: const Color(0xFFEF4444),
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-          return;
-        }
-        
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => DetailAnimeScreen(animeId: anime.id),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF1E293B),
-              const Color(0xFF0F172A),
-            ],
-          ),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.08),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (hasValidPoster)
-                CachedNetworkImage(
-                  imageUrl: posterUrl!,
-                  fit: BoxFit.cover,
-                  fadeInDuration: const Duration(milliseconds: 300),
-                  httpHeaders: _getImageHeaders(),
-                  placeholder: (context, url) => _buildPlaceholder(),
-                  errorWidget: (context, url, error) => _buildPlaceholder(),
-                )
-              else
-                _buildPlaceholder(),
-              
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.5),
-                      Colors.black.withOpacity(0.85),
-                    ],
-                    stops: const [0.4, 0.7, 1.0],
+    return AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (context, child) => Transform.scale(
+        scale: _scaleAnimation.value,
+        child: child,
+      ),
+      child: GestureDetector(
+        onTapDown: _handlePressIn,
+        onTapUp: _handlePressOut,
+        onTapCancel: _handleCancel,
+        onLongPress: _showPreview,
+        onTap: () {
+            if (widget.onTap != null) {
+                widget.onTap!();
+            } else {
+                 Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DetailAnimeScreen(animeId: widget.anime.id),
                   ),
-                ),
+                );
+            }
+        },
+        child: Container(
+          width: cardWidth,
+          margin: const EdgeInsets.only(bottom: 8),
+          child: AspectRatio(
+            aspectRatio: 3 / 4,
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border, width: 1),
               ),
-              
-              if (anime.totalEpisodes != null && anime.id.isNotEmpty)
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Poster Image
+                  CachedNetworkImage(
+                    imageUrl: widget.anime.poster,
+                    fit: BoxFit.cover,
+                    fadeInDuration: const Duration(milliseconds: 500),
+                    httpHeaders: const {
+                      'Referer': 'https://hianime.to/',
+                      'User-Agent': 'Mozilla/5.0',
+                    },
+                    placeholder: (context, url) => Shimmer.fromColors(
+                      baseColor: const Color(0xFF1E1E2C),
+                      highlightColor: const Color(0xFF2A2A35),
+                      child: Container(color: Colors.white10),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                        color: AppColors.cardBg,
+                        child: const Icon(Icons.broken_image, color: Colors.white24,),
+                    ),
+                  ),
+
+                  // Gradient Overlay
+                  Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF6366F1).withOpacity(0.9),
-                          const Color(0xFF818CF8).withOpacity(0.85),
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: AppColors.cardGradient,
+                        stops: const [0.4, 0.7, 1.0], // Matching locations [0.4, 0.7, 1.0]
+                      ),
+                    ),
+                  ),
+
+                  // Rating Badge (Top Left)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(0, 0, 0, 0.7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star, size: 10, color: AppColors.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.anime.rating ?? 'N/A',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '${anime.totalEpisodes}',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
                     ),
                   ),
-                ),
-              
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.7),
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Text(
-                          anime.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            height: 1.25,
-                            letterSpacing: -0.3,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.8),
-                                offset: const Offset(0, 1),
-                                blurRadius: 4,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (anime.latestEpisode != null) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF10B981),
-                                Color(0xFF059669),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF10B981).withOpacity(0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.white,
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 7),
-                              Flexible(
-                                child: Text(
-                                  anime.latestEpisode!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildPlaceholder() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF1E293B),
-            const Color(0xFF0F172A),
-          ],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.image_not_supported_rounded,
-          size: 36,
-          color: Colors.white.withOpacity(0.15),
+                  // Anime Info (Bottom)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.anime.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              height: 1.28, // 18px line height / 14px font size ~= 1.28
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${widget.anime.type ?? 'TV'} ${widget.anime.totalEpisodes != null ? '• ${widget.anime.totalEpisodes} Ep' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              color: AppColors.textSub,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

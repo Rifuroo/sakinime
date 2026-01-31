@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import '../providers/anime_provider.dart';
 import '../widgets/anime_card.dart';
 import '../widgets/custom_search_bar.dart';
+import '../constants/app_colors.dart';
 import '../widgets/loading_shimmer.dart';
 
 class AllAnimeScreen extends StatefulWidget {
@@ -20,9 +21,6 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
   final ScrollController _scrollController = ScrollController();
   late AnimationController _starController;
   bool _isSearching = false;
-  int _currentPage = 1;
-  static const int _batchSize = 50;
-  int _displayedItems = _batchSize;
 
   @override
   void initState() {
@@ -76,8 +74,6 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
   Future<void> _onSearch(String query) async {
     setState(() {
       _isSearching = query.trim().isNotEmpty;
-      _currentPage = 1;
-      _displayedItems = _batchSize;
     });
     
     final provider = Provider.of<AnimeProvider>(context, listen: false);
@@ -92,25 +88,18 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
     _searchController.clear();
     setState(() {
       _isSearching = false;
-      _currentPage = 1;
-      _displayedItems = _batchSize;
     });
     Provider.of<AnimeProvider>(context, listen: false).fetchAllAnimes(page: 1);
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _currentPage = 1;
-      _displayedItems = _batchSize;
-    });
-    AnimeCard.clearCache();
     await Provider.of<AnimeProvider>(context, listen: false).fetchAllAnimes(page: 1);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           // Animated Background Stars
@@ -136,8 +125,8 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
               
               return RefreshIndicator(
                 onRefresh: _refresh,
-                color: const Color(0xFF818CF8),
-                backgroundColor: const Color(0xFF1A1A2E),
+                color: AppColors.primary,
+                backgroundColor: AppColors.cardBg,
                 child: CustomScrollView(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -146,7 +135,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                     SliverAppBar(
                       floating: false,
                       pinned: true,
-                      backgroundColor: const Color(0xFF0A0A0A),
+                      backgroundColor: AppColors.background,
                       elevation: 0,
                       toolbarHeight: 80,
                       flexibleSpace: Stack(
@@ -158,8 +147,8 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                                 colors: [
-                                  const Color(0xFF6366F1).withOpacity(0.12),
-                                  const Color(0xFF8B5CF6).withOpacity(0.08),
+                                  AppColors.primary.withValues(alpha: 0.12),
+                                  const Color(0xFF8B5CF6).withValues(alpha: 0.08),
                                   const Color(0xFF0A0A0A),
                                 ],
                                 stops: const [0.0, 0.5, 1.0],
@@ -177,8 +166,8 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                 shape: BoxShape.circle,
                                 gradient: RadialGradient(
                                   colors: [
-                                    const Color(0xFF818CF8).withOpacity(0.2),
-                                    const Color(0xFF6366F1).withOpacity(0.1),
+                                    AppColors.primary.withValues(alpha: 0.2),
+                                    AppColors.primary.withValues(alpha: 0.1),
                                     Colors.transparent,
                                   ],
                                 ),
@@ -196,14 +185,14 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
                                         colors: [
-                                          Color(0xFF6366F1),
-                                          Color(0xFF818CF8),
+                                          AppColors.primary,
+                                          AppColors.primary,
                                         ],
                                       ),
                                       borderRadius: BorderRadius.circular(14),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF6366F1).withOpacity(0.4),
+                                          color: AppColors.primary.withValues(alpha: 0.4),
                                           blurRadius: 16,
                                           offset: const Offset(0, 6),
                                         ),
@@ -261,13 +250,13 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    Colors.white.withOpacity(0.12),
-                                    Colors.white.withOpacity(0.06),
+                                    Colors.white.withValues(alpha: 0.12),
+                                    Colors.white.withValues(alpha: 0.06),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.1),
+                                  color: Colors.white.withValues(alpha: 0.1),
                                 ),
                               ),
                               child: const Icon(
@@ -307,14 +296,14 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
                                       colors: [
-                                        Color(0xFF6366F1),
+                                        AppColors.primary,
                                         Color(0xFF8B5CF6),
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(3),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF6366F1).withOpacity(0.5),
+                                        color: AppColors.primary.withValues(alpha: 0.5),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
@@ -394,18 +383,18 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: [
-                                            const Color(0xFF6366F1).withOpacity(0.2),
-                                            const Color(0xFF8B5CF6).withOpacity(0.15),
+                                            AppColors.primary.withValues(alpha: 0.2),
+                                            const Color(0xFF8B5CF6).withValues(alpha: 0.15),
                                           ],
                                         ),
                                         borderRadius: BorderRadius.circular(10),
                                         border: Border.all(
-                                          color: const Color(0xFF6366F1).withOpacity(0.4),
+                                          color: AppColors.primary.withValues(alpha: 0.4),
                                           width: 1,
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: const Color(0xFF6366F1).withOpacity(0.2),
+                                            color: AppColors.primary.withValues(alpha: 0.2),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -416,7 +405,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                         style: GoogleFonts.poppins(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF818CF8),
+                                          color: AppColors.primary,
                                           letterSpacing: 0.3,
                                         ),
                                       ),
@@ -438,13 +427,13 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                const Color(0xFFEF4444).withOpacity(0.1),
-                                const Color(0xFFDC2626).withOpacity(0.08),
+                                const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                const Color(0xFFDC2626).withValues(alpha: 0.08),
                               ],
                             ),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: const Color(0xFFEF4444).withOpacity(0.3),
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
@@ -453,7 +442,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEF4444).withOpacity(0.2),
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(
@@ -481,7 +470,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
 
                     // Anime Grid
                     provider.isLoading && displayList.isEmpty
-                        ? const SliverToBoxAdapter(child: LoadingShimmer())
+                        ? SliverToBoxAdapter(child: LoadingShimmer())
                         : displayList.isEmpty
                             ? SliverFillRemaining(child: _buildEmptyState())
                             : SliverPadding(
@@ -520,7 +509,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                                           child: CircularProgressIndicator(
                                             strokeWidth: 3,
                                             valueColor: const AlwaysStoppedAnimation<Color>(
-                                              Color(0xFF818CF8),
+                                              AppColors.primary,
                                             ),
                                           ),
                                         ),
@@ -568,8 +557,8 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFF6366F1).withOpacity(0.15),
-                      const Color(0xFF8B5CF6).withOpacity(0.08),
+                      AppColors.primary.withValues(alpha: 0.15),
+                      const Color(0xFF8B5CF6).withValues(alpha: 0.08),
                       Colors.transparent,
                     ],
                   ),
@@ -587,7 +576,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.2),
+                      color: AppColors.primary.withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
@@ -628,7 +617,7 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
             ElevatedButton(
               onPressed: _clearSearch,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 28,
@@ -688,7 +677,7 @@ class StarfieldPainter extends CustomPainter {
       final twinkle = (math.sin(animation * math.pi * 2 * star.speed) + 1) / 2;
       final opacity = star.opacity * twinkle * 0.4;
       
-      paint.color = const Color(0xFF818CF8).withOpacity(opacity);
+      paint.color = AppColors.primary.withValues(alpha: opacity);
       
       final x = star.x * size.width;
       final y = star.y * size.height;
@@ -696,7 +685,7 @@ class StarfieldPainter extends CustomPainter {
       canvas.drawCircle(Offset(x, y), star.size, paint);
       
       if (star.size > 1.5) {
-        paint.color = const Color(0xFF6366F1).withOpacity(opacity * 0.6);
+        paint.color = AppColors.primary.withValues(alpha: opacity * 0.6);
         canvas.drawLine(
           Offset(x - star.size * 2, y),
           Offset(x + star.size * 2, y),

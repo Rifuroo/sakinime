@@ -1,7 +1,7 @@
-// widgets/episode_progress_indicator.dart - Episode Progress Indicator
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/watch_history_service.dart';
+import '../constants/app_colors.dart';
 
 class EpisodeProgressIndicator extends StatefulWidget {
   final String animeTitle;
@@ -75,13 +75,13 @@ class _EpisodeProgressIndicatorState extends State<EpisodeProgressIndicator> {
             child: Container(
               height: 3,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
               ),
               child: LinearProgressIndicator(
                 value: _progress!.progressPercentage,
                 backgroundColor: Colors.transparent,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  _progress!.isCompleted ? Colors.green : const Color(0xFF6366F1),
+                  _progress!.isCompleted ? Colors.green : AppColors.primary,
                 ),
                 minHeight: 3,
               ),
@@ -116,7 +116,7 @@ class _EpisodeProgressIndicatorState extends State<EpisodeProgressIndicator> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -200,7 +200,7 @@ class _EpisodeProgressBadgeState extends State<EpisodeProgressBadge> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: const Color(0xFF6366F1),
+          color: AppColors.primary,
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
@@ -217,3 +217,4 @@ class _EpisodeProgressBadgeState extends State<EpisodeProgressBadge> {
     return const SizedBox.shrink();
   }
 }
+

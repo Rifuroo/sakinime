@@ -34,6 +34,9 @@ class TranslationService {
   // Cache for translated subtitles
   static final Map<String, Map<String, String>> _translationCache = {};
   
+  // Public getter for cache (for optimization checks)
+  static Map<String, Map<String, String>> get translationCache => _translationCache;
+  
   // Rate limiting
   static DateTime _lastAICall = DateTime.now().subtract(const Duration(seconds: 2));
   static const Duration _aiCallDelay = Duration(milliseconds: 1500); // 1.5 second delay between AI calls
@@ -47,11 +50,6 @@ class TranslationService {
   /// Translate subtitle text to target language with AI styling
   static Future<String> translateText(String text, String targetLang, {String style = 'anime'}) async {
     if (text.trim().isEmpty) return text;
-    
-    // Skip translation for corrupted subtitles
-    if (_isCorruptedEncoding(text)) {
-      return '[Subtitle encoding error]';
-    }
     
     // Check cache first (include style in cache key)
     final cacheKey = '${text.hashCode}_${targetLang}_$style';
@@ -109,6 +107,54 @@ class TranslationService {
       }
       return text; // Return original if translation fails
     }
+  }
+  
+  /// Batch translate multiple texts in parallel (optimized for subtitle streams)
+  static Future<Map<String, String>> batchTranslateTexts(
+    List<String> texts, 
+    String targetLang, 
+    {String style = 'anime'}
+  ) async {
+    if (texts.isEmpty) return {};
+    
+    final results = <String, String>{};
+    final uniqueTexts = texts.toSet().toList(); // Remove duplicates
+    
+    // Check cache first
+    final uncachedTexts = <String>[];
+    for (final text in uniqueTexts) {
+      final cacheKey = '${text.hashCode}_${targetLang}_$style';
+      if (_translationCache.containsKey(targetLang) && 
+          _translationCache[targetLang]!.containsKey(cacheKey)) {
+        results[text] = _translationCache[targetLang]![cacheKey]!;
+      } else {
+        uncachedTexts.add(text);
+      }
+    }
+    
+    if (uncachedTexts.isEmpty) return results;
+    
+    // Translate in parallel batches of 5 to avoid overwhelming the API
+    const batchSize = 5;
+    for (var i = 0; i < uncachedTexts.length; i += batchSize) {
+      final batch = uncachedTexts.skip(i).take(batchSize).toList();
+      
+      // Translate batch in parallel
+      final futures = batch.map((text) => translateText(text, targetLang, style: style));
+      final translations = await Future.wait(futures);
+      
+      // Store results
+      for (var j = 0; j < batch.length; j++) {
+        results[batch[j]] = translations[j];
+      }
+      
+      // Small delay between batches to avoid rate limiting
+      if (i + batchSize < uncachedTexts.length) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    }
+    
+    return results;
   }
   
   /// Enhance translation with AI styling
@@ -495,18 +541,12 @@ class TranslationService {
     text = text.replaceAll(RegExp(r'\([^)]*sound[^)]*\)', caseSensitive: false), '');
     text = text.replaceAll(RegExp(r'\([^)]*music[^)]*\)', caseSensitive: false), '');
     
-    // Handle corrupted encoding (like Arabic showing as ØØ§Ø±ÙØ¶Ø§)
-    if (_isCorruptedEncoding(text)) {
-      if (kDebugMode) {
-        print('⚠️ Detected corrupted encoding, skipping translation: "$text"');
-      }
-      return 'Subtitle encoding error'; // Return placeholder
-    }
-    
+    // Don't skip any text - display everything like React Native does
     return text;
   }
   
   /// Check if text has corrupted encoding
+  /*
   static bool _isCorruptedEncoding(String text) {
     // Check for common corrupted encoding patterns
     if (text.contains(RegExp(r'Ø[Ø§-Ù]+'))) return true; // Arabic corruption
@@ -515,6 +555,7 @@ class TranslationService {
     
     return false;
   }
+  */
   
   /// Basic post-processing (simplified)
   static String _basicPostProcess(String text, String targetLang) {

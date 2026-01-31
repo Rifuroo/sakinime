@@ -11,6 +11,7 @@ class StreamLink {
   final String? serverId;
   final String? format;
   final String? note;
+  final Map<String, String>? headers;
 
   StreamLink({
     required this.provider,
@@ -22,6 +23,7 @@ class StreamLink {
     this.serverId,
     this.format,
     this.note,
+    this.headers,
   });
 
   factory StreamLink.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class StreamLink {
       serverId: json['serverId'] ?? json['id'] ?? json['post'],
       format: json['format'],
       note: json['note'],
+      headers: json['headers'] != null ? Map<String, String>.from(json['headers']) : null,
     );
   }
 
@@ -70,6 +73,7 @@ class StreamLink {
       'serverId': serverId,
       'format': format,
       'note': note,
+      'headers': headers,
     };
   }
 }
@@ -146,6 +150,9 @@ class Anime {
   final String? type;
   final String? score;
   final List<String>? genres;
+  final String? nextEpisodeDate; // ISO string for countdown
+  final String? bannerImage;
+  final String? description; // Alias for synopsis to match some UI calls
 
   Anime({
     required this.id,
@@ -161,6 +168,9 @@ class Anime {
     this.type,
     this.score,
     this.genres,
+    this.nextEpisodeDate,
+    this.bannerImage,
+    this.description,
   });
 
   factory Anime.fromJson(Map<String, dynamic> json) {
@@ -283,33 +293,36 @@ class Anime {
         typeText = null;
       }
       
-      // ✅ STEP 8: Extract rating/score safely
+      // ✅ STEP 8: Extract rating/score safely - Match Expo's extensive fallbacks
       String? ratingText;
       String? scoreText;
       
       try {
-        if (json['score'] != null) {
-          final scoreValue = json['score'];
-          
-          if (scoreValue is Map) {
-            // If score is an object with 'value' key
-            final value = scoreValue['value'];
-            if (value != null) {
-              ratingText = value.toString();
-              scoreText = value.toString();
-            }
-          } else {
-            // If score is a direct value
-            ratingText = scoreValue.toString();
-            scoreText = scoreValue.toString();
-          }
+        // Check list of possible score/rating fields
+        final possibleFields = [
+          'malScore', 'averageScore', 'MAL_score', 'rating', 'score', 'stats.rating', 'moreInfo.score'
+        ];
+
+        for (var field in possibleFields) {
+           dynamic val;
+           if (field.contains('.')) {
+              final parts = field.split('.');
+              val = json[parts[0]]?[parts[1]];
+           } else {
+              val = json[field];
+           }
+
+           if (val != null && val.toString().isNotEmpty && val.toString() != 'null') {
+              if (val is Map && val['value'] != null) {
+                ratingText = val['value'].toString();
+                break;
+              } else {
+                ratingText = val.toString();
+                break;
+              }
+           }
         }
-        
-        // Fallback to rating field
-        if (ratingText == null && json['rating'] != null) {
-          ratingText = json['rating'].toString();
-          scoreText = json['rating'].toString();
-        }
+        scoreText = ratingText;
       } catch (e) {
         if (kDebugMode) print('   ⚠️ Rating/Score parse error: $e');
         ratingText = null;
@@ -333,6 +346,11 @@ class Anime {
         type: typeText,
         score: scoreText,
         genres: genreList,
+        nextEpisodeDate: json['nextEpisodeDate']?.toString() ?? 
+                         json['airing_at']?.toString() ?? 
+                         json['next_episode_at']?.toString(),
+        bannerImage: json['bannerImage']?.toString() ?? json['image']?.toString(),
+        description: synopsisText,
       );
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -363,6 +381,9 @@ class Anime {
       'type': type,
       'score': score,
       'genres': genres,
+      'nextEpisodeDate': nextEpisodeDate,
+      'bannerImage': bannerImage,
+      'description': description,
     };
   }
 }
@@ -380,6 +401,11 @@ class AnimeDetail {
   final Map<String, dynamic>? batch;
   final String? type;
   final String? score;
+  final String? bannerImage;
+
+  final List<Anime> relatedAnime;
+  final List<Anime> recommendedAnime;
+  final String? nextEpisodeDate;
 
   AnimeDetail({
     required this.id,
@@ -394,6 +420,10 @@ class AnimeDetail {
     this.batch,
     this.type,
     this.score,
+    this.relatedAnime = const [],
+    this.recommendedAnime = const [],
+    this.nextEpisodeDate,
+    this.bannerImage,
   });
 
   factory AnimeDetail.fromJson(Map<String, dynamic> json) {
@@ -474,10 +504,29 @@ class AnimeDetail {
     if (json['rating'] != null) info['Rating'] = json['rating'].toString();
     if (json['type'] != null) info['Type'] = json['type'].toString();
     if (json['status'] != null) info['Status'] = json['status'].toString();
+    if (json['status'] != null) info['Status'] = json['status'].toString();
     // ✅ Use totalEpisodes instead of episodes array
     if (json['totalEpisodes'] != null) info['Total Episodes'] = json['totalEpisodes'].toString();
     if (json['duration'] != null) info['Duration'] = json['duration'].toString();
-    if (json['aired'] != null) info['Aired'] = json['aired'].toString();
+    
+    // ✅ Formatting Aired Date
+    if (json['aired'] != null) {
+      final airedData = json['aired'];
+      if (airedData is Map) {
+        final from = airedData['from']?.toString() ?? '';
+        final to = airedData['to']?.toString() ?? '';
+        if (from.isNotEmpty && to.isNotEmpty) {
+          info['Aired'] = '$from - $to';
+        } else if (from.isNotEmpty) {
+          info['Aired'] = from;
+        } else {
+          info['Aired'] = 'Unknown';
+        }
+      } else {
+        info['Aired'] = airedData.toString();
+      }
+    }
+    
     if (json['premiered'] != null) info['Premiered'] = json['premiered'].toString();
     
     // ✅ FIX: Handle studios/producers as List or String
@@ -523,8 +572,10 @@ class AnimeDetail {
       }
     }
 
-    // ✅ FIXED: Use safe genre parsing
-    final genreList = _parseGenreList(json['genreList'] ?? json['genres']);
+    // ✅ FIXED: Use safe genre parsing - Match Expo's fallbacks
+    final genreList = _parseGenreList(
+      json['genreList'] ?? json['genres'] ?? json['moreInfo']?['genres']
+    );
 
     // Batch info
     Map<String, dynamic>? batchInfo;
@@ -541,6 +592,21 @@ class AnimeDetail {
       posterImage = 'https://placehold.co/300x400/1a1f3a/white?text=${Uri.encodeComponent(shortTitle)}';
     }
 
+    // ✅ Related & Recommended
+    final related = <Anime>[];
+    if (json['relatedAnimes'] is List) {
+      for (var item in json['relatedAnimes']) {
+        try { related.add(Anime.fromJson(Map<String, dynamic>.from(item))); } catch (_) {}
+      }
+    }
+    
+    final recommended = <Anime>[];
+    if (json['recommendedAnimes'] is List) {
+      for (var item in json['recommendedAnimes']) {
+        try { recommended.add(Anime.fromJson(Map<String, dynamic>.from(item))); } catch (_) {}
+      }
+    }
+
     return AnimeDetail(
       id: animeId,
       title: animeTitle,
@@ -554,8 +620,22 @@ class AnimeDetail {
       batch: batchInfo,
       type: json['type'],
       score: json['score']?['value']?.toString() ?? json['rating']?.toString(),
+      relatedAnime: related,
+      recommendedAnime: recommended,
+      nextEpisodeDate: json['nextEpisodeDate']?.toString() ?? 
+                         json['airing_at']?.toString() ?? 
+                         json['next_episode_at']?.toString(),
+      bannerImage: json['bannerImage']?.toString() ?? json['image']?.toString(),
     );
   }
+
+  // Helpers for UI
+  String? get japanese => info['Japanese'];
+  String? get synonyms => info['Synonyms'];
+  String? get aired => info['Aired'];
+  String? get studios => info['Studio'];
+  String? get producers => info['Producers'];
+  String? get duration => info['Duration'];
 
   Map<String, dynamic> toJson() {
     return {
@@ -572,6 +652,29 @@ class AnimeDetail {
       'type': type,
       'score': score,
     };
+  }
+}
+
+class Character {
+  final String id;
+  final String name;
+  final String? image;
+  final String? role;
+
+  Character({
+    required this.id,
+    required this.name,
+    this.image,
+    this.role,
+  });
+
+  factory Character.fromJson(Map<String, dynamic> json) {
+    return Character(
+      id: json['id']?.toString() ?? json['character_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? json['character_name']?.toString() ?? 'Unknown',
+      image: json['imageUrl']?.toString() ?? json['image']?.toString() ?? json['poster']?.toString(),
+      role: json['role']?.toString(),
+    );
   }
 }
 
@@ -634,16 +737,16 @@ class Episode {
     
     String episodeUrl = '';
     
-    // ✅ Zoro uses `id` for episode id
+    // ✅ Zoro uses `id` for episode id - Match Expo's episodeId fallback
     if (json['id'] != null && json['id'].toString().isNotEmpty) {
       episodeUrl = json['id'].toString();
       if (kDebugMode) print('   ✅ URL from id: $episodeUrl');
-    } else if (json['slug'] != null && json['slug'].toString().isNotEmpty) {
-      episodeUrl = json['slug'].toString();
-      if (kDebugMode) print('   ✅ URL from slug: $episodeUrl');
     } else if (json['episodeId'] != null && json['episodeId'].toString().isNotEmpty) {
       episodeUrl = json['episodeId'].toString();
       if (kDebugMode) print('   ✅ URL from episodeId: $episodeUrl');
+    } else if (json['slug'] != null && json['slug'].toString().isNotEmpty) {
+      episodeUrl = json['slug'].toString();
+      if (kDebugMode) print('   ✅ URL from slug: $episodeUrl');
     } else if (json['href'] != null && json['href'].toString().isNotEmpty) {
       final href = json['href'].toString();
       final match = RegExp(r'/episode/([^/]+)').firstMatch(href);
@@ -663,7 +766,7 @@ class Episode {
     }
     
     return Episode(
-      number: episodeTitle.isNotEmpty ? episodeTitle : (episodeNum != null ? 'Episode $episodeNum' : 'Episode'),
+      number: episodeNum?.toString() ?? json['number']?.toString() ?? '?',
       date: episodeDate,
       url: episodeUrl,
       title: episodeTitle,

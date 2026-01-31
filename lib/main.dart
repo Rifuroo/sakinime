@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
@@ -11,12 +10,15 @@ import 'package:media_kit/media_kit.dart';
 
 import 'providers/anime_provider.dart';
 import 'providers/player_provider.dart';
+import 'services/download_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/all_anime_screen.dart';
-import 'screens/genre_screen.dart';
+import 'screens/browse_screen.dart';
+import 'screens/search_screen.dart';
 import 'screens/player_screen.dart';
 import 'utils/platform_utils.dart';
+import 'widgets/app_drawer.dart';
 
 void main() async {
   // ✅ Ensure Flutter binding is initialized
@@ -65,6 +67,27 @@ void main() async {
   runApp(const MyApp());
 }
 
+class AppInitializer extends StatefulWidget {
+  final Widget child;
+  const AppInitializer({Key? key, required this.child}) : super(key: key);
+
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      Provider.of<AnimeProvider>(context, listen: false).loadThemeColor();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
@@ -74,35 +97,42 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AnimeProvider()),
         ChangeNotifierProvider(create: (_) => PlayerProvider()),
+        ChangeNotifierProvider(create: (_) => DownloadService()),
       ],
-      child: MaterialApp(
-        title: 'Sukinime',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xFF0a0e27),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF1a1f3a),
-            elevation: 0,
-          ),
-          textTheme: GoogleFonts.poppinsTextTheme(
-            Theme.of(context).textTheme.apply(
-              bodyColor: Colors.white,
-              displayColor: Colors.white,
-            ),
-          ),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-            background: const Color(0xFF0a0e27),
-          ),
+      child: AppInitializer(
+        child: Consumer<AnimeProvider>(
+          builder: (context, provider, child) {
+            return MaterialApp(
+              title: 'Sukinime',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData(
+                useMaterial3: true,
+                brightness: Brightness.dark,
+                scaffoldBackgroundColor: const Color(0xFF0a0e27),
+                appBarTheme: const AppBarTheme(
+                  backgroundColor: Color(0xFF1a1f3a),
+                  elevation: 0,
+                ),
+                textTheme: GoogleFonts.poppinsTextTheme(
+                  Theme.of(context).textTheme.apply(
+                    bodyColor: Colors.white,
+                    displayColor: Colors.white,
+                  ),
+                ),
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: provider.primaryColor,
+                  brightness: Brightness.dark,
+                  surface: const Color(0xFF0a0e27),
+                ),
+              ),
+              home: const SplashScreen(),
+              routes: {
+                '/home': (context) => const MainNavigation(),
+                '/player': (context) => const PlayerScreen(),
+              },
+            );
+          },
         ),
-        home: const SplashScreen(),
-        routes: {
-          '/home': (context) => const MainNavigation(),
-          '/player': (context) => const PlayerScreen(),
-        },
       ),
     );
   }
@@ -124,7 +154,8 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
   static const List<Widget> _screens = <Widget>[
     HomeScreen(),
     AllAnimeScreen(),
-    GenreScreen(),
+    BrowseScreen(),
+    SearchScreen(),
   ];
 
   @override
@@ -167,6 +198,7 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
+      drawer: const AppDrawer(),
       body: Stack(
         children: [
           // Animated gradient background
@@ -206,7 +238,7 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.deepPurple.withValues(alpha: 0.3),
+            color: Provider.of<AnimeProvider>(context).primaryColor.withValues(alpha: 0.3),
             blurRadius: 20,
             spreadRadius: 0,
             offset: const Offset(0, 8),
@@ -243,7 +275,8 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
               items: <BottomNavigationBarItem>[
                 _buildNavItem(Icons.home_outlined, Icons.home_filled, 'Home', 0),
                 _buildNavItem(Icons.video_library_outlined, Icons.video_library, 'Semua', 1),
-                _buildNavItem(Icons.category_outlined, Icons.category, 'Genre', 2),
+                _buildNavItem(Icons.explore_outlined, Icons.explore, 'Browse', 2),
+                _buildNavItem(Icons.search_outlined, Icons.search, 'Search', 3),
               ],
               currentIndex: _selectedIndex,
               onTap: _onItemTapped,
@@ -276,6 +309,7 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
     int index,
   ) {
     final isSelected = _selectedIndex == index;
+    final primaryColor = Provider.of<AnimeProvider>(context).primaryColor;
     
     return BottomNavigationBarItem(
       icon: AnimatedContainer(
@@ -284,12 +318,12 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isSelected 
-            ? Colors.deepPurple.withValues(alpha: 0.3)
+            ? primaryColor.withValues(alpha: 0.3)
             : Colors.transparent,
           borderRadius: BorderRadius.circular(15),
           boxShadow: isSelected ? [
             BoxShadow(
-              color: Colors.deepPurple.withValues(alpha: 0.4),
+              color: primaryColor.withValues(alpha: 0.4),
               blurRadius: 15,
               spreadRadius: 0,
             ),
@@ -307,14 +341,14 @@ class _MainNavigationState extends State<MainNavigation> with TickerProviderStat
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Colors.deepPurple.withValues(alpha: 0.4),
-              Colors.purpleAccent.withValues(alpha: 0.3),
+              primaryColor.withValues(alpha: 0.4),
+              primaryColor.withValues(alpha: 0.2),
             ],
           ),
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
-              color: Colors.deepPurple.withValues(alpha: 0.5),
+              color: primaryColor.withValues(alpha: 0.5),
               blurRadius: 20,
               spreadRadius: 0,
             ),

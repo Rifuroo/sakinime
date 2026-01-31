@@ -2,13 +2,18 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'dart:math';
+import '../utils/m3u8_parser.dart';
 
 class ZoroService {
+  static final ZoroService _instance = ZoroService._internal();
+  factory ZoroService() => _instance;
+
   // ✅ NEW API BASE URL
-  final String baseUrl = 'https://hianime-api.joas77055.workers.dev/api/v1';
+  final String baseUrl = 'https://api.animo.qzz.io/api/v1';
   late final Dio _dio;
 
-  ZoroService() {
+  ZoroService._internal() {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 30),
@@ -69,49 +74,86 @@ class ZoroService {
           if (data != null) {
             if (kDebugMode) print('   📦 Data keys: ${data.keys.toList()}');
             
-            // Parse sources from 'link' object
+            // NEW: Parse sources following Expo parity logic (Qualities + Sources fallback)
             final sources = <Map<String, dynamic>>[];
+            final List qualitiesList = (data['qualities'] is List) ? data['qualities'] : [];
+            final List sourcesList = (data['sources'] is List) ? data['sources'] : [];
+            final allFound = [...qualitiesList, ...sourcesList];
             
-            if (data['link'] is Map) {
-              final link = data['link'];
-              final videoUrl = link['proxyUrl']?.toString() ?? 
-                              link['file']?.toString() ?? 
-                              link['directUrl']?.toString() ?? '';
-              
-              if (videoUrl.isNotEmpty) {
-                sources.add({
-                  'url': videoUrl,
-                  'quality': 'auto',
-                  'type': link['type']?.toString() ?? 'hls',
-                });
-                if (kDebugMode) print('   🎥 Video URL found');
+            if (allFound.isNotEmpty) {
+              for (var s in allFound) {
+                if (s is Map) {
+                  final qLabel = s['quality']?.toString() ?? s['label']?.toString() ?? 'auto';
+                  final videoUrl = s['url']?.toString() ?? s['file']?.toString() ?? '';
+                  
+                  if (videoUrl.isNotEmpty && !sources.any((e) => e['quality'] == qLabel)) {
+                    sources.add({
+                      'url': videoUrl,
+                      'quality': qLabel,
+                      'type': s['type']?.toString() ?? (videoUrl.contains('.m3u8') ? 'hls' : 'mp4'),
+                      'size': s['size']?.toString(),
+                    });
+                  }
+                }
               }
             } 
             
-            // Parse qualities from 'qualities' list (New API field)
-            if (data['qualities'] is List) {
-              for (var q in data['qualities']) {
-                if (q is Map) {
-                  sources.add({
-                    'url': q['file']?.toString() ?? '',
-                    'quality': q['quality']?.toString() ?? 'auto',
-                    'type': 'hls',
-                    'size': q['size']?.toString(),
-                    'bandwidth': q['bandwidth'],
-                  });
-                }
-              }
-              if (kDebugMode) print('   ✨ Qualities found: ${data['qualities'].length}');
+            if (sources.isEmpty && data['link'] is Map && data['link']['file'] != null) {
+              final link = data['link'];
+              sources.add({
+                'url': link['file'].toString(),
+                'quality': 'auto',
+                'type': 'hls',
+              });
+            }
+
+            if (kDebugMode) {
+               print('   📊 Sources Found: ${sources.length}');
+               for (var s in sources) print('      - ${s['quality']}: ${s['url'].toString().substring(0, min(30, s['url'].toString().length))}...');
+               print('   🔍 RAW API DATA KEYS: ${data.keys.toList()}');
+               print('   🔍 RAW qualities field: ${data['qualities']}');
+               print('   🔍 RAW sources field: ${data['sources']}');
+               print('   🔍 RAW link field: ${data['link']}');
             }
             
-            if (data['sources'] is List && sources.isEmpty) {
-              for (var source in data['sources']) {
-                if (source is Map) {
-                  sources.add({
-                    'url': source['url']?.toString() ?? source['file']?.toString() ?? '',
-                    'quality': source['quality']?.toString() ?? 'auto',
-                    'type': source['type']?.toString() ?? 'hls',
-                  });
+            // If only 'auto' quality found, try to parse M3U8 master playlist
+            if (sources.length == 1 && sources[0]['quality'] == 'auto') {
+              final masterUrl = sources[0]['url'].toString();
+              if (masterUrl.contains('master.m3u8')) {
+                if (kDebugMode) print('   🔍 Detected master.m3u8, parsing quality variants...');
+                
+                try {
+                  // Extract directUrl if available (non-proxied)
+                  String urlToParse = masterUrl;
+                  if (data['link'] is Map && data['link']['directUrl'] != null) {
+                    urlToParse = data['link']['directUrl'].toString();
+                  }
+                  
+                  final qualities = await M3U8Parser.parseQualities(urlToParse);
+                  
+                  if (qualities.isNotEmpty) {
+                    // Use Direct URLs with Headers instead of Proxy
+                    // Proxying M3U8 breaks relative paths in sub-manifests
+                    sources.clear();
+                    for (var q in qualities) {
+                      sources.add({
+                        'url': q['url'],
+                        'quality': q['quality'],
+                        'type': 'hls',
+                        'size': q['size'],
+                        'resolution': q['resolution'],
+                        'headers': {
+                          'Referer': 'https://megacloud.tv',
+                          'User-Agent': 'Sukinime/2.0',
+                          'Origin': 'https://megacloud.tv',
+                        }
+                      });
+                    }
+                    
+                    if (kDebugMode) print('   ✅ Replaced with ${sources.length} parsed qualities (Direct URL)');
+                  }
+                } catch (e) {
+                  if (kDebugMode) print('   ⚠️ M3U8 parsing failed: $e');
                 }
               }
             }

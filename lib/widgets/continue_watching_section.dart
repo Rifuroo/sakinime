@@ -42,85 +42,40 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
     }
   }
 
-  Future<void> _resumeWatching(WatchHistoryItem item) async {
+  void _resumeWatching(WatchHistoryItem item) {
+    // Create initial episode object from history
+    final initialEpisode = Episode(
+      url: item.episodeId,
+      title: item.episodeTitle,
+      number: item.episodeNumber.toString(),
+      date: DateTime.now().toIso8601String(),
+      episodeNumber: item.episodeNumber,
+    );
+
+    // ✅ INSTANT RESUME: Push player immediately with what we have
+    // The player will fetch the full list in background if needed
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AnimeVideoPlayer(
+          episodeToLoad: initialEpisode,
+          animeId: item.animeId,
+          animeTitle: item.animeTitle,
+          allEpisodes: [initialEpisode], // Player will background-load the rest
+          animePoster: item.animePoster,
+        ),
+      ),
+    );
+    
+    // Optional: Pre-fetch details in background to warm up cache / history migration
+    _preFetchDetail(item);
+  }
+
+  Future<void> _preFetchDetail(WatchHistoryItem item) async {
     try {
-      // Create a temporary episode object from history
-      final initialEpisode = Episode(
-        url: item.episodeId,
-        title: item.episodeTitle,
-        number: item.episodeNumber.toString(),
-        date: DateTime.now().toIso8601String(),
-        episodeNumber: item.episodeNumber,
-      );
-
-      // Fetch full details to get all episodes for the player
       final animeService = AnimeService();
-      var fullDetail = await animeService.getAnimeDetail(item.animeId);
-      
-      // Fallback: If detail fetch fails by ID (common in old history), try searching by title
-      if ((fullDetail == null || fullDetail.episodes.isEmpty) && item.animeTitle.isNotEmpty) {
-        if (kDebugMode) print('🔍 History fallback: searching for "${item.animeTitle}"');
-        final searchResult = await animeService.searchAnime(item.animeTitle);
-        if (searchResult.isNotEmpty) {
-           // Get detail for the first search result
-           final animeId = searchResult[0].id;
-           await WatchHistoryService.migrateAnimeId(item.animeId, animeId);
-           fullDetail = await animeService.getAnimeDetail(animeId);
-        }
-      }
-      
-      List<Episode> allEpisodes = [initialEpisode];
-      if (fullDetail != null && fullDetail.episodes.isNotEmpty) {
-        allEpisodes = fullDetail.episodes;
-      }
-
-      // Find the specific episode in the full list if possible
-      Episode episodeToLoad = initialEpisode;
-      try {
-        episodeToLoad = allEpisodes.firstWhere(
-          (e) => e.url == item.episodeId || e.number == item.episodeNumber.toString(),
-          orElse: () => initialEpisode,
-        );
-      } catch (_) {}
-
-      if (!mounted) return;
-
-      // Navigate to video player with full list
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => AnimeVideoPlayer(
-            episodeToLoad: episodeToLoad,
-            animeId: item.animeId,
-            animeTitle: item.animeTitle,
-            allEpisodes: allEpisodes,
-            animePoster: item.animePoster,
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      
-      // Fallback: Navigate with single episode if detail fetch fails
-      final fallbackEpisode = Episode(
-        url: item.episodeId,
-        title: item.episodeTitle,
-        number: item.episodeNumber.toString(),
-        date: DateTime.now().toIso8601String(),
-        episodeNumber: item.episodeNumber,
-      );
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => AnimeVideoPlayer(
-            episodeToLoad: fallbackEpisode,
-            animeId: item.animeId,
-            animeTitle: item.animeTitle,
-            allEpisodes: [fallbackEpisode],
-            animePoster: item.animePoster,
-          ),
-        ),
-      );
-    }
+      await animeService.getAnimeDetail(item.animeId);
+      // No need to do anything with result here, it helps migrate ID if needed
+    } catch (_) {}
   }
 
   @override
@@ -145,15 +100,15 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
               children: [
                 Row(
                   children: [
-                    Container(
+                      Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withOpacity(0.15),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
                         Icons.play_circle_outline,
-                        color: Color(0xFF818CF8),
+                        color: Color(0xFFF59E0B),
                         size: 20,
                       ),
                     ),
@@ -180,7 +135,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                   child: Text(
                     'View All',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF818CF8),
+                      color: const Color(0xFFF59E0B),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -220,12 +175,12 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.15),
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
                     Icons.play_circle_outline,
-                    color: Color(0xFF818CF8),
+                    color: Color(0xFFF59E0B),
                     size: 20,
                   ),
                 ),
@@ -254,12 +209,12 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                   width: 140,
                   margin: const EdgeInsets.only(right: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Center(
                     child: CircularProgressIndicator(
-                      color: Color(0xFF6366F1),
+                      color: Color(0xFFF59E0B),
                       strokeWidth: 2,
                     ),
                   ),
@@ -277,9 +232,9 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
       width: 140,
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: const Color(0xFF18181B), // Matches React Native #18181B (Zinc 900)
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -304,7 +259,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                                 imageUrl: item.animePoster!,
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(
-                                  color: Colors.white.withOpacity(0.1),
+                                  color: Colors.white.withValues(alpha: 0.1),
                                   child: const Icon(
                                     Icons.movie,
                                     color: Colors.white24,
@@ -312,7 +267,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                                   ),
                                 ),
                                 errorWidget: (context, url, error) => Container(
-                                  color: Colors.white.withOpacity(0.1),
+                                  color: Colors.white.withValues(alpha: 0.1),
                                   child: const Icon(
                                     Icons.broken_image,
                                     color: Colors.white24,
@@ -321,7 +276,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                                 ),
                               )
                             : Container(
-                                color: Colors.white.withOpacity(0.1),
+                                color: Colors.white.withValues(alpha: 0.1),
                                 child: const Icon(
                                   Icons.movie,
                                   color: Colors.white24,
@@ -338,13 +293,13 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                       child: Container(
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.3),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
                         ),
                         child: LinearProgressIndicator(
                           value: item.progressPercentage,
                           backgroundColor: Colors.transparent,
-                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
                           minHeight: 4,
                         ),
                       ),
@@ -353,7 +308,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.3),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                         ),
                         child: const Center(
@@ -388,7 +343,7 @@ class _ContinueWatchingSectionState extends State<ContinueWatchingSection> {
                     Text(
                       'Episode ${item.episodeNumber}',
                       style: GoogleFonts.inter(
-                        color: const Color(0xFF818CF8),
+                        color: const Color(0xFFF59E0B),
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
