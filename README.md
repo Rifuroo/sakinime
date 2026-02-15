@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="assets/icon.png" width="120" alt="Sakinime Logo">
+</p>
+
 # Sakinime 
 
-![Sakinime Banner](assets/icon.png)
+> [!WARNING]
+> **Status: Still in Development (Alpha)**
+> Proyek ini masih dalam tahap pengembangan awal. Gunakan dengan bijak karena **masih banyak perbaikan** dan perubahan besar yang akan datang.
 
 **Sakinime** adalah aplikasi streaming anime lintas platform kelas dunia yang dibangun menggunakan **Flutter**. Dirancang khusus untuk memberikan pengalaman menonton yang *immersive*, elegan, dan bertenaga AI dengan integrasi sistem yang mendalam, terutama pada platform Windows.
 
