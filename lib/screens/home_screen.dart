@@ -11,7 +11,7 @@ import 'search_screen.dart';
 import '../widgets/hero_banner_carousel.dart';
 import 'home_collection_screen.dart';
 import '../constants/app_colors.dart';
-import 'package:shimmer/shimmer.dart';
+import '../utils/platform_utils.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +24,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<double> _headerOpacity = ValueNotifier(0.0);
   bool _isLoading = true;
+  
+  // Desktop detection for layout adjustments
+  bool get _isDesktop => PlatformUtils.isDesktop;
 
   @override
   void initState() {
@@ -59,7 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async {
     setState(() => _isLoading = true);
-    await Provider.of<AnimeProvider>(context, listen: false).fetchHomeSections();
+    // Force refresh on pull-to-refresh
+    await Provider.of<AnimeProvider>(context, listen: false).fetchHomeSections(forceRefresh: true);
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -91,93 +95,99 @@ class _HomeScreenState extends State<HomeScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
-                  child: Padding(
-                     padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 16, bottom: 120),
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         // Main Header
-                         _buildMainHeader(),
-                         
-                         // Data Sections
-                         Consumer<AnimeProvider>(
-                           builder: (context, provider, _) {
-                              if (_isLoading && provider.homeRecentEpisodes.isEmpty) {
-                                return _buildSkeletonLoader();
-                              }
-                              
-                              return Column(
-                                children: [
-                                  // Hero Banner Carousel (using Most Favorite as hero anime)
-                                  if (provider.homeMostFavorite.isNotEmpty)
-                                    HeroBannerCarousel(
-                                      heroAnime: provider.homeMostFavorite.take(5).toList(),
-                                    ),
-                                  
-                                  // Hero Discover Card
-                                  _buildHeroCard(),
-
-                                  // Continue Watching
-                                  const ContinueWatchingSection(),
-
-                                  // Sections matching HomeScreen.js order as close as possible
-                                  // Spotlight (using Most Favorite as proxy)
-                                  if (provider.homeMostFavorite.isNotEmpty)
-                                    _buildSection(
-                                      title: '🎯 Spotlight',
-                                      subtitle: 'Top pinned anime',
-                                      data: provider.homeMostFavorite,
-                                      type: HomeCollectionType.mostFavorite,
-                                    ),
-
-                                  // Trending (using Top Airing as proxy)
-                                  if (provider.homeTopAiring.isNotEmpty)
-                                    _buildSection(
-                                      title: '🔥 Trending Now',
-                                      subtitle: 'Currently popular',
-                                      data: provider.homeTopAiring,
-                                      type: HomeCollectionType.topAiring,
-                                    ),
-
-                                  // Latest Episodes
-                                  if (provider.homeRecentEpisodes.isNotEmpty)
-                                    _buildSection(
-                                      title: '⚡ Latest Episodes',
-                                      subtitle: 'Freshly updated',
-                                      data: provider.homeRecentEpisodes,
-                                      type: HomeCollectionType.recentEpisodes,
-                                    ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: Padding(
+                        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 16, bottom: 120),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Main Header
+                            _buildMainHeader(),
+                            
+                            // Data Sections
+                            Consumer<AnimeProvider>(
+                              builder: (context, provider, _) {
+                                if (_isLoading && provider.homeRecentEpisodes.isEmpty) {
+                                  return _buildSkeletonLoader();
+                                }
+                                
+                                return Column(
+                                  children: [
+                                    // Hero Banner Carousel (using Most Favorite as hero anime)
+                                    if (provider.homeMostFavorite.isNotEmpty)
+                                      HeroBannerCarousel(
+                                        heroAnime: provider.homeMostFavorite.take(5).toList(),
+                                      ),
                                     
-                                  // New Added
-                                  if (provider.homeRecentAdded.isNotEmpty)
-                                    _buildSection(
-                                      title: '✨ New Added',
-                                      subtitle: 'Just arrived',
-                                      data: provider.homeRecentAdded,
-                                      type: HomeCollectionType.recentAdded,
-                                    ),
+                                    // Hero Discover Card
+                                    _buildHeroCard(),
 
-                                  // Most Popular
-                                  if (provider.homeMostPopular.isNotEmpty)
-                                    _buildSection(
-                                      title: '👑 Most Popular',
-                                      subtitle: 'Community favorites',
-                                      data: provider.homeMostPopular,
-                                      type: HomeCollectionType.mostPopular,
-                                    ),
-                                ],
-                              );
-                           }
-                         ),
-                       ],
-                     ),
+                                    // Continue Watching
+                                    const ContinueWatchingSection(),
+
+                                    // Sections matching HomeScreen.js order as close as possible
+                                    // Spotlight (using Most Favorite as proxy)
+                                    if (provider.homeMostFavorite.isNotEmpty)
+                                      _buildSection(
+                                        title: '🎯 Spotlight',
+                                        subtitle: 'Top pinned anime',
+                                        data: provider.homeMostFavorite,
+                                        type: HomeCollectionType.mostFavorite,
+                                      ),
+
+                                    // Trending (using Top Airing as proxy)
+                                    if (provider.homeTopAiring.isNotEmpty)
+                                      _buildSection(
+                                        title: '🔥 Trending Now',
+                                        subtitle: 'Currently popular',
+                                        data: provider.homeTopAiring,
+                                        type: HomeCollectionType.topAiring,
+                                      ),
+
+                                    // Latest Episodes
+                                    if (provider.homeRecentEpisodes.isNotEmpty)
+                                      _buildSection(
+                                        title: '⚡ Latest Episodes',
+                                        subtitle: 'Freshly updated',
+                                        data: provider.homeRecentEpisodes,
+                                        type: HomeCollectionType.recentEpisodes,
+                                      ),
+                                      
+                                    // New Added
+                                    if (provider.homeRecentAdded.isNotEmpty)
+                                      _buildSection(
+                                        title: '✨ New Added',
+                                        subtitle: 'Just arrived',
+                                        data: provider.homeRecentAdded,
+                                        type: HomeCollectionType.recentAdded,
+                                      ),
+
+                                    // Most Popular
+                                    if (provider.homeMostPopular.isNotEmpty)
+                                      _buildSection(
+                                        title: '👑 Most Popular',
+                                        subtitle: 'Community favorites',
+                                        data: provider.homeMostPopular,
+                                        type: HomeCollectionType.mostPopular,
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Floating Blur Header
+          // Floating Blur Header (Mobile Only - Desktop has sidebar)
+          if (!_isDesktop)
           Positioned(
             top: 0,
             left: 0,

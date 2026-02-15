@@ -83,144 +83,251 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
                   ),
                   
                   SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 60), // Space for floating poster
-                          
-                          // Title
-                          if (anime == null)
-                            _buildShimmerBlock(height: 32, width: 200)
-                          else
-                            Text(
-                              anime.title,
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                height: 1.2,
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          
-                          // Badges Row
-                          if (anime == null)
-                            Row(children: [_buildShimmerBlock(height: 20, width: 60), const SizedBox(width: 8), _buildShimmerBlock(height: 20, width: 60)])
-                          else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _buildRatingBadge(anime.rating),
-                              _buildPill(anime.type ?? 'TV'),
-                              _buildPill('${anime.episodes.length} Ep'),
-                              if (anime.status != null) 
-                                _buildPill(anime.status!, isAiring: anime.status!.toLowerCase().contains('airing')),
-                            ],
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1200),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Desktop Layout Threshold
+                              if (constraints.maxWidth > 900) {
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Left Column: Poster, Actions, Info
+                                    SizedBox(
+                                      width: 300,
+                                      child: Column(
+                                        children: [
+                                          const SizedBox(height: 60), // Space for floating poster
+                                          if (anime != null) ...[
+                                            _buildRatingBadge(anime.rating),
+                                            const SizedBox(height: 16),
+                                            _buildActionRow(anime, provider), // Vertical/Stack action row maybe?
+                                            const SizedBox(height: 24),
+                                            _buildInfoGridList(anime),
+                                            const SizedBox(height: 24),
+                                            Text('GENRES', style: _sectionLabelStyle),
+                                            const SizedBox(height: 12),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: (anime.genres ?? []).map((g) => _buildGenreTag(g)).toList(),
+                                            ),
+                                          ]
+                                        ],
+                                      ),
+                                    ),
+                                    
+                                    const SizedBox(width: 40),
+                                    
+                                    // Right Column: Title, Synopsis, Episodes
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 60),
+                                            Text(
+                                              anime?.title ?? '',
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.white,
+                                                fontSize: 32,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.2,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Wrap(
+                                              spacing: 8,
+                                              children: [
+                                                _buildPill(anime?.type ?? 'TV'),
+                                                _buildPill('${anime?.episodes.length ?? 0} Ep'),
+                                                if (anime?.status != null) 
+                                                  _buildPill(anime!.status!, isAiring: anime.status!.toLowerCase().contains('airing')),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 32),
+                                            Text('SYNOPSIS', style: _sectionLabelStyle),
+                                            const SizedBox(height: 12),
+                                            if (anime == null)
+                                              _buildShimmerBlock(height: 100, width: double.infinity)
+                                            else
+                                              _buildSynopsis(anime.synopsis),
+                                            
+                                            const SizedBox(height: 32),
+                                            
+                                            // Episodes Header
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                  Text('EPISODES (${anime?.episodes.length ?? 0})', style: _sectionLabelStyle),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 16),
+                                            
+                                            // Controls
+                                            _buildEpisodeControls(anime),
+                                            const SizedBox(height: 16),
+                                            
+                                            // For Desktop we might want to just show list here or Grid
+                                            // But since sliver list is outside, we need to adapt structure.
+                                            // To keep it simple in this refactor, we will put the list inside this column 
+                                            // via ShrinkWrap or keep sliver structure but conditional?
+                                            // Sliver inside Sliver only works with NestedScrollView.
+                                            // Changing strategy: We are in SliverToBoxAdapter. We CANNOT put a SliverList here easily without CustomScrollView.
+                                            // So we will use a ListView/GridView shrinkWrap for the desktop right column.
+                                            
+                                            _buildDesktopEpisodeList(anime, context),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+                              
+                              // Mobile Layout (Existing)
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 60), // Space for floating poster
+                                  
+                                  // Title
+                                  if (anime == null)
+                                    _buildShimmerBlock(height: 32, width: 200)
+                                  else
+                                    Text(
+                                      anime.title,
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                  const SizedBox(height: 12),
+                                  
+                                  // Badges Row
+                                  if (anime == null)
+                                    Row(children: [_buildShimmerBlock(height: 20, width: 60), const SizedBox(width: 8), _buildShimmerBlock(height: 20, width: 60)])
+                                  else
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      _buildRatingBadge(anime.rating),
+                                      _buildPill(anime.type ?? 'TV'),
+                                      _buildPill('${anime.episodes.length} Ep'),
+                                      if (anime.status != null) 
+                                        _buildPill(anime.status!, isAiring: anime.status!.toLowerCase().contains('airing')),
+                                    ],
+                                  ),
+                                  
+                                  const SizedBox(height: 32),
+                                  
+                                  // Action Row
+                                  if (anime == null)
+                                     _buildActionRowShimmer()
+                                  else
+                                     _buildActionRow(anime, provider),
+                                  
+                                  const SizedBox(height: 32),
+                                  
+                                  // Information
+                                  Text('INFORMATION', style: _sectionLabelStyle),
+                                  const SizedBox(height: 16),
+                                  _buildInfoGridList(anime),
+                                  
+                                  const SizedBox(height: 32),
+                                  
+                                  // Genres
+                                  Text('GENRES', style: _sectionLabelStyle),
+                                  const SizedBox(height: 16),
+                                  if (anime == null)
+                                    Wrap(spacing: 8, runSpacing: 8, children: List.generate(3, (_) => _buildShimmerBlock(height: 24, width: 70, radius: 12)))
+                                  else
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: (anime.genres ?? []).map((g) => _buildGenreTag(g)).toList(),
+                                  ),
+                                  
+                                  const SizedBox(height: 32),
+                                  
+                                  // Synopsis
+                                  Text('SYNOPSIS', style: _sectionLabelStyle),
+                                  const SizedBox(height: 12),
+                                  if (anime == null)
+                                    _buildShimmerBlock(height: 100, width: double.infinity)
+                                  else
+                                    _buildSynopsis(anime.synopsis),
+                                  
+                                  const SizedBox(height: 32),
+                                  
+                                  // Characters
+                                  if (characters.isNotEmpty || provider.isLoadingCharacters) ...[
+                                     Row(
+                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                       children: [
+                                         Text('CHARACTERS', style: _sectionLabelStyle),
+                                       ],
+                                     ),
+                                     const SizedBox(height: 16),
+                                     SizedBox(
+                                       height: 150,
+                                       child: provider.isLoadingCharacters && characters.isEmpty
+                                       ? ListView.separated(
+                                           scrollDirection: Axis.horizontal,
+                                           itemCount: 5,
+                                           separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                           itemBuilder: (context, index) => _buildShimmerBlock(height: 150, width: 100, radius: 16),
+                                         )
+                                       : ListView.separated(
+                                         scrollDirection: Axis.horizontal,
+                                         itemCount: characters.length,
+                                         separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                         itemBuilder: (context, index) => _buildCharacterCard(characters[index], context),
+                                       ),
+                                     ),
+                                     const SizedBox(height: 32),
+                                  ],
+                                  
+                                  // Studio/Aired Box
+                                  Row(
+                                    children: [
+                                      Expanded(child: _buildInfoBox('STUDIO', anime?.studios)),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: _buildInfoBox('AIRED', anime?.aired)),
+                                    ],
+                                  ),
+                                  
+                                  const SizedBox(height: 32),
+                                  
+                                  // Episodes Header
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                        Text('EPISODES (${anime?.episodes.length ?? 0})', style: _sectionLabelStyle),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  
+                                  // Controls
+                                  _buildEpisodeControls(anime),
+                                  const SizedBox(height: 16),
+                                ],
+                              );
+                            }
                           ),
-                          
-                          const SizedBox(height: 32),
-                          
-                          // Action Row
-                          if (anime == null)
-                             _buildActionRowShimmer()
-                          else
-                             _buildActionRow(anime, provider),
-                          
-                          const SizedBox(height: 32),
-                          
-                          // Information
-                          Text('INFORMATION', style: _sectionLabelStyle),
-                          const SizedBox(height: 16),
-                          _buildInfoGridList(anime),
-                          
-                          const SizedBox(height: 32),
-                          
-                          // Genres
-                          Text('GENRES', style: _sectionLabelStyle),
-                          const SizedBox(height: 16),
-                          if (anime == null)
-                            Wrap(spacing: 8, runSpacing: 8, children: List.generate(3, (_) => _buildShimmerBlock(height: 24, width: 70, radius: 12)))
-                          else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: (anime.genres ?? []).map((g) => _buildGenreTag(g)).toList(),
-                          ),
-                          
-                          const SizedBox(height: 32),
-                          
-                          // Synopsis
-                          Text('SYNOPSIS', style: _sectionLabelStyle),
-                          const SizedBox(height: 12),
-                          if (anime == null)
-                            _buildShimmerBlock(height: 100, width: double.infinity)
-                          else
-                            _buildSynopsis(anime.synopsis),
-                          
-                          const SizedBox(height: 32),
-                          
-                          // Characters
-                          if (characters.isNotEmpty || provider.isLoadingCharacters) ...[
-                             Row(
-                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                               children: [
-                                 Text('CHARACTERS', style: _sectionLabelStyle),
-                               ],
-                             ),
-                             const SizedBox(height: 16),
-                             SizedBox(
-                               height: 150,
-                               child: provider.isLoadingCharacters && characters.isEmpty
-                               ? ListView.separated(
-                                   scrollDirection: Axis.horizontal,
-                                   itemCount: 5,
-                                   separatorBuilder: (_, __) => const SizedBox(width: 12),
-                                   itemBuilder: (context, index) => _buildShimmerBlock(height: 150, width: 100, radius: 16),
-                                 )
-                               : ListView.separated(
-                                 scrollDirection: Axis.horizontal,
-                                 itemCount: characters.length,
-                                 separatorBuilder: (_, __) => const SizedBox(width: 12),
-                                 itemBuilder: (context, index) => _buildCharacterCard(characters[index], context),
-                               ),
-                             ),
-                             const SizedBox(height: 32),
-                          ],
-                          
-                          // Studio/Aired Box
-                          Row(
-                            children: [
-                              Expanded(child: _buildInfoBox('STUDIO', anime?.studios)),
-                              const SizedBox(width: 12),
-                              Expanded(child: _buildInfoBox('AIRED', anime?.aired)),
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 32),
-                          
-                          // Episodes Header
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                                Text('EPISODES (${anime?.episodes.length ?? 0})', style: _sectionLabelStyle),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          
-                          // Controls
-                          _buildEpisodeControls(anime),
-                          const SizedBox(height: 16),
-                        ],
+                        ),
                       ),
                     ),
                   ),
 
-                  // Lazy Episode List
-                  _buildSliverEpisodeList(anime, context),
+                  // Lazy Episode List (Only for Mobile)
+                  // For Desktop, we rendered it inside the column above
+                  _buildMobileEpisodeSliver(anime, MediaQuery.of(context).size.width > 900),
 
                   // Bottom Padding & Pagination
                   SliverToBoxAdapter(
@@ -653,7 +760,35 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
       );
   }
 
-  Widget _buildSliverEpisodeList(AnimeDetail? anime, BuildContext context) {
+  Widget _buildDesktopEpisodeList(AnimeDetail? anime, BuildContext context) {
+      if (anime == null) return const SizedBox.shrink();
+      final filtered = _getFilteredEpisodes(anime);
+      final visible = _getVisibleEpisodes(filtered);
+      
+      if (visible.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.all(40),
+          child: Center(child: Text('No episodes found', style: GoogleFonts.inter(color: AppColors.textMuted))),
+        );
+      }
+      
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 80,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.0,
+        ),
+        itemCount: visible.length,
+        itemBuilder: (context, index) => _buildEpisodeGridItem(visible[index], anime, context),
+      );
+  }
+
+  Widget _buildMobileEpisodeSliver(AnimeDetail? anime, bool isDesktop) {
+    if (isDesktop) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
     if (anime == null) {
       return SliverToBoxAdapter(
         child: Padding(
@@ -678,7 +813,7 @@ class _DetailAnimeScreenState extends State<DetailAnimeScreen> {
         ),
       );
     }
-
+    
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       sliver: _isGridMode 

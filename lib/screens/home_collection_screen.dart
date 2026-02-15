@@ -110,10 +110,13 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
           onRefresh: _onRefresh,
           color: AppColors.primary,
           backgroundColor: AppColors.cardBg,
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
               SliverAppBar(
                 pinned: true,
                 backgroundColor: AppColors.background,
@@ -226,8 +229,8 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 200,
                       childAspectRatio: 0.65,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 20,
@@ -279,6 +282,8 @@ class _HomeCollectionScreenState extends State<HomeCollectionScreen> {
                 ),
               ),
             ],
+              ),
+            ),
           ),
         ),
       ),

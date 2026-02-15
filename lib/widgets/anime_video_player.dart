@@ -5,10 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:window_manager/window_manager.dart';
 import 'dart:async';
 
 
@@ -24,6 +26,8 @@ import '../services/anime_service.dart';
 import '../services/subtitle_parser_service.dart';
 import '../services/watch_history_service.dart';
 import '../services/translation_service.dart';
+import '../providers/global_player_provider.dart';
+import '../utils/platform_utils.dart';
 import 'video_player_controls.dart';
 import 'video_player_subtitle_overlay.dart';
 import 'video_player_next_episode_overlay.dart';
@@ -141,6 +145,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Duration _seekOverlayDuration = Duration.zero;
   bool _isSeekForward = true;
   Timer? _seekOverlayTimer;
+  bool _isSpeedUp = false; // YouTube-style 2x speed hold
+
+  late GlobalPlayerProvider _globalPlayerProvider;
+
+
 
   @override
   void initState() {
@@ -151,11 +160,39 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     _currentEpisode = widget.episodeToLoad;
     _localAllEpisodes = widget.allEpisodes ?? [widget.episodeToLoad];
     _enableWakelock();
-    _enableWakelock();
     _loadPlayerSettings();
+    _globalPlayerProvider = Provider.of<GlobalPlayerProvider>(context, listen: false);
     _loadEpisodeAndPlay();
     
-    // Background tasks deferred - handled in _initializePlayer after success
+    // Set Full Player Active
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<GlobalPlayerProvider>(context, listen: false).setFullPlayerActive(true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _hideControlsTimer?.cancel();
+    _subtitleTimer?.cancel();
+    _progressSaveTimer?.cancel();
+    _nextEpisodeTimer?.cancel();
+    _indicatorTimer?.cancel();
+    _seekOverlayTimer?.cancel();
+    _positionSubscription?.cancel();
+    // _floating?.dispose(); // Floating package doesn't have dispose method
+    // _mediaKitPlayer?.dispose(); // DO NOT DISPOSE SHARED PLAYER
+    // _videoController?.dispose(); 
+    
+    // Reset Full Player Active using cached provider
+    _globalPlayerProvider.setFullPlayerActive(false);
+    
+    // IMPORTANT: Do NOT dispose _mediaKitPlayer or _videoController 
+    // because they are shared from GlobalPlayerProvider!
+    
+    super.dispose();
   }
 
 
@@ -382,39 +419,34 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   }
 
   void _setLandscapeOrientation() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    if (PlatformUtils.isDesktop) {
+      // Desktop fullscreen using window_manager
+      windowManager.setFullScreen(true);
+    } else {
+      // Mobile fullscreen using system orientation
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
     _hideSystemUI();
   }
 
   void _resetOrientation() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    if (PlatformUtils.isDesktop) {
+      // Exit desktop fullscreen
+      windowManager.setFullScreen(false);
+    } else {
+      // Reset mobile orientation
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
     _showSystemUI();
   }
 
-  @override
-  void dispose() {
-    _hideControlsTimer?.cancel();
-    _subtitleTimer?.cancel();
-    _progressSaveTimer?.cancel();
-    _nextEpisodeTimer?.cancel();
-    _indicatorTimer?.cancel();
-    _mediaKitPlayer?.dispose();
-    _videoController?.dispose();
-    _disableWakelock();
-    try {
-      ScreenBrightness().resetApplicationScreenBrightness();
-    } catch (_) {}
-    _showSystemUI();
-    _resetOrientation();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
+
 
   // ========== SYSTEM UI ==========
   void _hideSystemUI() {
@@ -447,6 +479,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         // Load preferred languages (default to English + Indo AI if not set)
         _selectedSubtitleLang = prefs.getString('subtitle_lang') ?? 'English'; 
         _selectedAILang = prefs.getString('ai_lang') ?? 'id';
+        _globalPlayerProvider.setAISettings(_selectedAILang);
       });
     }
   }
@@ -465,6 +498,43 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _loadEpisodeAndPlay() async {
     if (_currentEpisode == null) return;
 
+    debugPrint('🎬 [PLAYER] Loading Episode: ${widget.animeTitle} - ${_currentEpisode?.number}');
+
+    // Check if we are already playing this episode in background
+    if (_globalPlayerProvider.isInitialized && 
+        _globalPlayerProvider.currentEpisode?.url == _currentEpisode!.url) {
+        
+        debugPrint('🚀 [PLAYER] BYPASS: Reusing existing global player instance (No reload)');
+        
+        // Just attach UI to existing player
+        setState(() {
+            _mediaKitPlayer = _globalPlayerProvider.player;
+            _mediaKitVideoController = _globalPlayerProvider.controller;
+            _isPlayerInitialized = true;
+            _isLoadingEpisode = false;
+            
+            // Sync subtitle state from provider
+            _selectedSubtitleLang = _globalPlayerProvider.selectedSubtitleLang;
+            _currentSubtitle = _globalPlayerProvider.currentSubtitle;
+            _subtitles = _globalPlayerProvider.subtitles.cast<ParsedSubtitle>();
+            
+            // Re-fetch additional data if needed (subs/qualities) but DON'T restart player
+            // Metadata is fast to reload if needed for UI lists
+        });
+        
+        // Re-setup listener
+        _positionSubscription?.cancel();
+        _positionSubscription = _mediaKitPlayer!.stream.position.listen((position) {
+          if (mounted && _globalPlayerProvider.subtitles.isNotEmpty) {
+            _updateSubtitle(position);
+          }
+          _checkAutoPlay(position);
+        });
+        
+        return; 
+    }
+
+
     setState(() {
       _isLoadingEpisode = true;
       _hasError = false;
@@ -473,7 +543,10 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
     try {
       final episodeId = _currentEpisode!.url;
+      final stopwatch = Stopwatch()..start();
+      debugPrint('⏳ [PLAYER] Fetching stream qualities for $episodeId...');
       final streamData = await ZoroService().getQualities(episodeId, dub: _audioType == 'dub');
+      debugPrint('✅ [PLAYER] Qualities fetched in ${stopwatch.elapsedMilliseconds}ms');
 
       if (streamData == null || !mounted) {
         throw Exception('Failed to load stream');
@@ -532,6 +605,16 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           _isLoadingEpisode = false;
           _currentStreamLink = initialQuality;
         });
+        
+        // Update Global Provider Metadata & SMTC
+        if (_currentStreamLink != null) {
+          _globalPlayerProvider.updateMetadata(
+            episode: _currentEpisode,
+            title: widget.animeTitle,
+            poster: widget.animePoster,
+            animeId: widget.animeId,
+          );
+        }
 
         if (_currentStreamLink != null) {
           // Check if previous subtitle preference exists in new list
@@ -577,6 +660,12 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   // ========== PLAYER INITIALIZATION ==========
   Future<void> _initializePlayer() async {
     if (_currentStreamLink == null || !mounted) return;
+    
+    // Ensure Global Player is ready
+    if (!_globalPlayerProvider.isInitialized) {
+       debugPrint('⚠️ [PLAYER] Provider not initialized, waiting 500ms...');
+       await Future.delayed(const Duration(milliseconds: 500));
+    }
 
     setState(() {
       // Only show full loading screen if this is a fresh init (not quality switch)
@@ -588,11 +677,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     });
 
     try {
-      // Reuse player if it exists, otherwise create it
-      _mediaKitPlayer ??= Player();
-      _mediaKitVideoController ??= VideoController(_mediaKitPlayer!);
+      // Use SHARED Player from GlobalProvider
+      _mediaKitPlayer = _globalPlayerProvider.player;
+      _mediaKitVideoController = _globalPlayerProvider.controller;
 
-      // Use headers from stream link if available (e.g. for M3U8 direct streams)
+      debugPrint('🎬 [PLAYER] Opening media: ${_currentStreamLink?.url}');
       final headers = _currentStreamLink?.headers ?? 
           (_currentHeaders.isNotEmpty 
               ? _currentHeaders 
@@ -600,7 +689,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
       // Capture current position before switching stream (for quality change)
       final currentPosition = _mediaKitPlayer!.state.position;
-      final shouldRestorePosition = currentPosition > Duration.zero && _isPlayerInitialized;
+      final shouldRestorePosition = currentPosition > Duration.zero && _mediaKitPlayer!.state.playing;
 
       await _mediaKitPlayer!.open(
         Media(_currentStreamLink!.url, httpHeaders: headers),
@@ -617,7 +706,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       
       // Setup position listener for subtitles
       _positionSubscription = _mediaKitPlayer!.stream.position.listen((position) {
-        if (mounted && _subtitles.isNotEmpty) {
+        if (mounted && _globalPlayerProvider.subtitles.isNotEmpty) {
           _updateSubtitle(position);
         }
         _checkAutoPlay(position);
@@ -676,6 +765,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       if (response.statusCode == 200) {
         final parsed = SubtitleParserService.parseSubtitles(response.body);
         if (mounted) {
+          _globalPlayerProvider.setSubtitles(parsed, lang);
           setState(() {
             _subtitles = parsed;
             _selectedSubtitleLang = lang;
@@ -686,35 +776,10 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       debugPrint('Subtitle load error: $e');
     }
   }
-
   void _updateSubtitle(Duration position) {
-    String newSubtitle = '';
-    int currentIndex = -1;
-
-    for (int i = 0; i < _subtitles.length; i++) {
-      final sub = _subtitles[i];
-      if (position >= sub.start && position <= sub.end) {
-        newSubtitle = sub.text;
-        currentIndex = i;
-        break;
-      }
-    }
-
-
-    if (newSubtitle != _currentSubtitle && mounted) {
-      if (_selectedAILang != 'none' && newSubtitle.isNotEmpty) {
-         _translateSubtitle(newSubtitle);
-         
-         // Pre-fetch next 5 subtitles
-         if (currentIndex != -1) {
-           _prefetchTranslations(currentIndex + 1, 5);
-         }
-      } else {
-        setState(() {
-          _currentSubtitle = newSubtitle;
-        });
-      }
-    }
+    setState(() {
+      _currentSubtitle = _globalPlayerProvider.currentSubtitle;
+    });
   }
 
   void _prefetchTranslations(int startIndex, int count) {
@@ -732,42 +797,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     TranslationService.batchTranslateTexts(textsToTranslate, _selectedAILang);
   }
 
-  Future<void> _translateSubtitle(String text) async {
-    // Skip if already translating or text is empty
-    if (_isTranslating || text.trim().isEmpty) return;
-    
-    // Skip if we already have the translation cached
-    final cacheKey = '${text.hashCode}_${_selectedAILang}_anime';
-    if (TranslationService.translationCache.containsKey(_selectedAILang) &&
-        TranslationService.translationCache[_selectedAILang]!.containsKey(cacheKey)) {
-      final cached = TranslationService.translationCache[_selectedAILang]![cacheKey]!;
-      if (mounted && _currentSubtitle != cached) {
-        setState(() => _currentSubtitle = cached);
-      }
-      return;
-    }
-    
-    // Check if we already have it in current state to avoid flicker
-    if (text == _currentSubtitle) return;
 
-    setState(() => _isTranslating = true);
-    try {
-      final translated = await TranslationService.translateText(text, _selectedAILang);
-      if (mounted) {
-        setState(() {
-          _currentSubtitle = translated;
-          _isTranslating = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _currentSubtitle = text; // Fallback to original
-          _isTranslating = false;
-        });
-      }
-    }
-  }
 
   // ========== CONTROLS ==========
   void _toggleControls() {
@@ -1093,6 +1123,23 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           // Perform Seek
           _seekRelative(isForward ? 10 : -10);
         },
+        onLongPressStart: (_) {
+          if (_isLocked) return;
+          setState(() {
+            _isSpeedUp = true;
+          });
+          _mediaKitPlayer?.setRate(2.0);
+          _videoController?.setPlaybackSpeed(2.0);
+        },
+        onLongPressEnd: (_) {
+          if (_isLocked) return;
+          setState(() {
+            _isSpeedUp = false;
+          });
+          // Restore user preference
+          _mediaKitPlayer?.setRate(_playbackSpeed);
+          _videoController?.setPlaybackSpeed(_playbackSpeed);
+        },
         child: Stack(
           children: [
             // Video Player
@@ -1129,10 +1176,39 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                 ),
               ),
 
-            // Actual Player Content - REMOVED redundant call that was causing crashes
-            // _buildPlayerContainer(),
+            // Speed Up Overlay (YouTube Style)
+            if (_isSpeedUp)
+              Positioned(
+                top: 40,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                         Text(
+                          '2x Speed',
+                          style: GoogleFonts.inter(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.fast_forward_rounded, color: Colors.white, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
-            // Double Tap Seek Overlay
+             // Double Tap Seek Overlay
             if (_showSeekOverlay)
               VideoPlayerSeekingOverlay(
                 duration: _seekOverlayDuration,
@@ -1361,6 +1437,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                 _isFullScreen = false;
               });
             } else {
+              // Set full player inactive BEFORE pop so mini player shows
+              Provider.of<GlobalPlayerProvider>(context, listen: false).setFullPlayerActive(false);
               Navigator.pop(context);
             }
           },

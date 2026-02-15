@@ -206,9 +206,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             _buildHeader(),
             _buildFilterPanel(),
             Expanded(
-              child: _isLoading
-                  ? _buildLoadingState()
-                  : _buildResultsGrid(),
+              child: Center(
+                child: ConstrainedBox(
+                   constraints: const BoxConstraints(maxWidth: 1200),
+                   child: _isLoading
+                      ? _buildLoadingState()
+                      : _buildResultsGrid(),
+                ),
+              ),
             ),
           ],
         ),
@@ -499,8 +504,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     return GridView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 200,
         childAspectRatio: 0.65,
         crossAxisSpacing: 16,
         mainAxisSpacing: 20,

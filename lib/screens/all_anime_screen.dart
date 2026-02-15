@@ -476,8 +476,8 @@ class _AllAnimeScreenState extends State<AllAnimeScreen> with TickerProviderStat
                             : SliverPadding(
                                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                                 sliver: SliverGrid(
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
+                                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 200, // Responsive width
                                     childAspectRatio: 0.65,
                                     crossAxisSpacing: 16,
                                     mainAxisSpacing: 20,

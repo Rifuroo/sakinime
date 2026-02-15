@@ -222,30 +222,35 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
-            
-            // Category Tabs
-            _buildCategoryTabs(),
-            
-            // Filter Panel
-            _buildFilterPanel(),
-            
-            // Anime Grid
-            Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : _animeList.isEmpty
-                      ? _buildEmptyState()
-                      : _buildAnimeGrid(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(),
+                
+                // Category Tabs
+                _buildCategoryTabs(),
+                
+                // Filter Panel
+                _buildFilterPanel(),
+                
+                // Anime Grid
+                Expanded(
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        )
+                      : _animeList.isEmpty
+                          ? _buildEmptyState()
+                          : _buildAnimeGrid(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -435,8 +440,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     return GridView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(20),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 200,
         childAspectRatio: 0.65,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,

@@ -5,7 +5,6 @@ import '../providers/anime_provider.dart';
 import '../constants/app_colors.dart';
 import '../screens/browse_screen.dart';
 import '../screens/schedule_screen.dart';
-import '../screens/home_collection_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});

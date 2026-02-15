@@ -249,13 +249,13 @@ class Anime {
         genreList = null;
       }
 
-      if (kDebugMode) {
-        if (genreList != null && genreList.isNotEmpty) {
-          print('   ✅ Genres: ${genreList.join(", ")}');
-        } else {
-          print('   ℹ️ No genres found');
-        }
-      }
+      // if (kDebugMode) {
+      //   if (genreList != null && genreList.isNotEmpty) {
+      //     print('   ✅ Genres: ${genreList.join(", ")}');
+      //   } else {
+      //     print('   ℹ️ No genres found');
+      //   }
+      // }
 
       // ✅ STEP 7: Extract all other fields safely
       String? synopsisText;

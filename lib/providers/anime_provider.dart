@@ -171,53 +171,61 @@ class AnimeProvider extends ChangeNotifier {
     }
   }
 
-  // LATEST ANIMES - Progressive Loading (Top to Bottom)
-  Future<void> fetchHomeSections() async {
+  // LATEST ANIMES - Optimized Progressive Loading (Balanced Speed)
+  Future<void> fetchHomeSections({bool forceRefresh = false}) async {
+    // Prevent concurrent calls
+    if (isHomeSectionsLoading) return;
+    
+    // If not forcing refresh and we have data, skip to avoid "massive" requests
+    if (!forceRefresh && homeMostFavorite.isNotEmpty && homeRecentEpisodes.isNotEmpty) {
+      if (kDebugMode) print('Home data exists, skipping fetch (Lazy Mode)');
+      return;
+    }
+    
     isHomeSectionsLoading = true;
     homeSectionsError = null;
     notifyListeners();
 
     try {
-      // Load sequentially from top to bottom of layout for better perceived performance
+      // 🚀 BATCH 1: Critical "Above the Fold" Content (Parallel)
+      await Future.wait([
+        if (forceRefresh || homeMostFavorite.isEmpty)
+          (() async {
+            try { homeMostFavorite = await _service.getMostFavorite(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 1 Error: $e'); }
+          })(),
+        if (forceRefresh || homeRecentEpisodes.isEmpty)
+          (() async {
+            try { homeRecentEpisodes = await _service.getRecentAnime(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 1 Error: $e'); }
+          })(),
+      ]);
+      notifyListeners();
+
+      // ⏳ SHORT DELAY (Safe but Fast)
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      // 1. Most Favorite (for Hero Banner - highest priority)
-      try {
-        homeMostFavorite = await _service.getMostFavorite(page: 1);
-        notifyListeners(); // Update UI immediately
-      } catch (e) {
-        if (kDebugMode) print('⚠️ Failed to load Most Favorite: $e');
-      }
+      // 🚀 BATCH 2: Trending & New Additions (Parallel)
+      await Future.wait([
+        if (forceRefresh || homeTopAiring.isEmpty)
+          (() async {
+            try { homeTopAiring = await _service.getTopAiring(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 2 Error: $e'); }
+          })(),
+        if (forceRefresh || homeRecentAdded.isEmpty)
+          (() async {
+            try { homeRecentAdded = await _service.getRecentAdded(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 2 Error: $e'); }
+          })(),
+      ]);
+      notifyListeners();
       
-      // 2. Recent Episodes (Latest Episodes section)
-      try {
-        homeRecentEpisodes = await _service.getRecentAnime(page: 1);
-        notifyListeners(); // Update UI immediately
-      } catch (e) {
-        if (kDebugMode) print('⚠️ Failed to load Recent Episodes: $e');
-      }
+      // ⏳ SHORT DELAY
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      // 3. Top Airing (Trending Now section)
+      // 🚀 BATCH 3: Most Popular
       try {
-        homeTopAiring = await _service.getTopAiring(page: 1);
-        notifyListeners(); // Update UI immediately
+        if (forceRefresh || homeMostPopular.isEmpty) {
+          homeMostPopular = await _service.getPopularAnime(page: 1);
+        }
       } catch (e) {
-        if (kDebugMode) print('⚠️ Failed to load Top Airing: $e');
-      }
-      
-      // 4. Recent Added (New Added section)
-      try {
-        homeRecentAdded = await _service.getRecentAdded(page: 1);
-        notifyListeners(); // Update UI immediately
-      } catch (e) {
-        if (kDebugMode) print('⚠️ Failed to load Recent Added: $e');
-      }
-      
-      // 5. Most Popular (last section)
-      try {
-        homeMostPopular = await _service.getPopularAnime(page: 1);
-        notifyListeners(); // Update UI immediately
-      } catch (e) {
-        if (kDebugMode) print('⚠️ Failed to load Most Popular: $e');
+        if (kDebugMode) print('⚠️ Batch 3 Error: $e');
       }
 
       if (homeRecentEpisodes.isEmpty &&
