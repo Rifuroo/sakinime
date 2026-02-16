@@ -19,24 +19,23 @@ Berbeda dengan aplikasi streaming anime biasa, Sakinime menggabungkan performa *
 ### 📺 Pengalaman Menonton Tingkat Lanjut
 - **Native Video Engine**: Menggunakan **Media Kit**, engine berbasis C++ yang memberikan pemutaran video 4K yang sangat lancar dengan penggunaan CPU yang minimal.
 - **Dynamic Resolution Switching**: Pilih resolusi terbaik (360p ke 1080p/4K) secara instan.
-- **Synchronized Metadata (SyncData)**: Sinkronisasi progres menonton dan status episode secara akurat.
+- **Synchronized Metadata (SyncData)**: Sinkronisasi progres menonton dan status episode secara lokal dan akurat.
 - **Multi-Server Bridge**: Koneksi cerdas ke berbagai server streaming untuk menghindari video yang macet atau *down*.
 
 ### 🤖 Kecerdasan Buatan (AI) & Subtitle
-- **AI Subtitle Refinement**: Tidak sekadar menerjemahkan, Sakinime menggunakan AI untuk menyesuaikan gaya bahasa subtitle agar sesuai dengan konteks percakapan di anime (Formal/Informal).
 - **Multiple Translation Engines**: Dukungan untuk Google Translate, LibreTranslate, dan MyMemory sebagai *fallback*.
 - **Sub-Style Control**: Kustomisasi penuh tampilan subtitle mulai dari font, bayangan, hingga posisi offset.
 
 ### 🪟 Eksklusivitas Windows (Optimized)
-- **Native SMTC**: Kontrol media penuh (Play, Pause, Seek, Next) yang terintegrasi dengan Windows Media Overlay dan tombol fungsi keyboard.
+- **Native SMTC**: Kontrol media penuh (Play, Pause, Seek, Next) yang terintegrasi dengan Windows Media Overlay dan tombol fungsi keyboard (Coming soon).
 - **Glassmorphism & Frameless UI**: Antarmuka modern yang borderless dengan efek transparansi yang elegan.
-- **Taskbar Media Controller**: Monitor progres video dan ganti episode langsung dari icon taskbar Windows.
+- **Taskbar Media Controller**: Monitor progres video dan ganti episode langsung dari icon taskbar Windows (Development).
 
 ### 🍱 Konten & Manajemen
-- **Smart Bookmark**: Simpan anime favoritmu secara lokal dengan akses instan.
+- **Smart Bookmark**: Simpan anime favoritmu secara lokal dengan akses instan (Development).
 - **Advanced Metadata Detail**: Informasi mendalam mulai dari daftar seiyuu (pengisi suara), studio produksi, hingga status rilis.
 - **Batch Viewing**: Dukungan untuk melihat daftar episode dalam format *batch* untuk mempermudah pengalaman menonton maraton/binge-watching.
-- **News & Schedule**: Berita anime terbaru dan jadwal rilis yang diperbarui setiap saat.
+- **News & Schedule**: Berita anime terbaru dan jadwal rilis yang diperbarui setiap saat (Development).
 
 ---
 
