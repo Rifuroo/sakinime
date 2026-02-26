@@ -63,7 +63,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
       final response = await http.get(
-        Uri.parse('https://api.animo.qzz.io/api/v1/schedule?date=$dateStr'),
+        Uri.parse('https://hianime-api-seven-steel.vercel.app/api/v1/schedule?date=$dateStr'),
       );
 
       if (response.statusCode == 200) {

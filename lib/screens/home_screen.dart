@@ -228,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                      ),
                                      const SizedBox(width: 10),
                                      Text(
-                                       'Sukinime',
+                                       'Sakinime',
                                        style: GoogleFonts.poppins(
                                          fontSize: 16,
                                          fontWeight: FontWeight.bold,

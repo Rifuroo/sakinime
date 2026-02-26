@@ -10,7 +10,7 @@ class ZoroService {
   factory ZoroService() => _instance;
 
   // ✅ NEW API BASE URL
-  final String baseUrl = 'https://api.animo.qzz.io/api/v1';
+  final String baseUrl = 'https://hianime-api-seven-steel.vercel.app/api/v1';
   late final Dio _dio;
 
   ZoroService._internal() {

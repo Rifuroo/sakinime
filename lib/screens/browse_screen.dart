@@ -123,7 +123,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     });
 
     try {
-      const baseUrl = 'https://api.animo.qzz.io/api/v1/animes';
+      const baseUrl = 'https://hianime-api-seven-steel.vercel.app/api/v1/animes';
       String url;
 
       if (_selectedGenre != null && _selectedGenre!.isNotEmpty) {

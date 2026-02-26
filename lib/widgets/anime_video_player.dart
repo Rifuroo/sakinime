@@ -13,7 +13,6 @@ import 'package:http/http.dart' as http;
 import 'package:window_manager/window_manager.dart';
 import 'dart:async';
 
-
 // Advanced Features
 import 'package:floating/floating.dart';
 
@@ -56,7 +55,8 @@ class AnimeVideoPlayer extends StatefulWidget {
   State<AnimeVideoPlayer> createState() => _AnimeVideoPlayerState();
 }
 
-class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBindingObserver {
+class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
+    with WidgetsBindingObserver {
   // Players
   Player? _mediaKitPlayer;
   VideoController? _mediaKitVideoController;
@@ -127,7 +127,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   double _dragStartValue = 0;
   bool _isDraggingBrightness = false;
 
-
   // ========== ADVANCED EPISODE LIST FEATURES ==========
   String _epSearch = '';
   String _epSort = 'desc';
@@ -135,7 +134,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   static const int _epsPerPage = 50;
   bool _isGridMode = false;
   bool _isDraggingVolume = false;
-  
+
   // New Features State
   double _playbackSpeed = 1.0;
   bool _isAutoPlayEnabled = true;
@@ -149,8 +148,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   late GlobalPlayerProvider _globalPlayerProvider;
 
-
-
   @override
   void initState() {
     super.initState();
@@ -161,13 +158,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     _localAllEpisodes = widget.allEpisodes ?? [widget.episodeToLoad];
     _enableWakelock();
     _loadPlayerSettings();
-    _globalPlayerProvider = Provider.of<GlobalPlayerProvider>(context, listen: false);
+    _globalPlayerProvider =
+        Provider.of<GlobalPlayerProvider>(context, listen: false);
     _loadEpisodeAndPlay();
-    
+
     // Set Full Player Active
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        Provider.of<GlobalPlayerProvider>(context, listen: false).setFullPlayerActive(true);
+        Provider.of<GlobalPlayerProvider>(context, listen: false)
+            .setFullPlayerActive(true);
       }
     });
   }
@@ -184,20 +183,19 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     _positionSubscription?.cancel();
     // _floating?.dispose(); // Floating package doesn't have dispose method
     // _mediaKitPlayer?.dispose(); // DO NOT DISPOSE SHARED PLAYER
-    // _videoController?.dispose(); 
-    
-    // Reset Full Player Active using cached provider
-    _globalPlayerProvider.setFullPlayerActive(false);
-    
-    // IMPORTANT: Do NOT dispose _mediaKitPlayer or _videoController 
+    // _videoController?.dispose();
+
+    // Reset Full Player Active using cached provider safely after frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) return; // Only if truly disposed
+      _globalPlayerProvider.setFullPlayerActive(false);
+    });
+
+    // IMPORTANT: Do NOT dispose _mediaKitPlayer or _videoController
     // because they are shared from GlobalPlayerProvider!
-    
+
     super.dispose();
   }
-
-
-
-
 
   List<Episode> _getFilteredEpisodes() {
     // Filter by search
@@ -242,25 +240,29 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                     decoration: BoxDecoration(
                       color: AppColors.cardBg,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.search_rounded, color: AppColors.textMuted, size: 16),
+                        Icon(Icons.search_rounded,
+                            color: AppColors.textMuted, size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                            style: GoogleFonts.inter(
+                                color: Colors.white, fontSize: 13),
                             decoration: InputDecoration(
                               hintText: 'Search episode...',
-                              hintStyle: GoogleFonts.inter(color: AppColors.textMuted),
+                              hintStyle:
+                                  GoogleFonts.inter(color: AppColors.textMuted),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
                             ),
                             cursorColor: AppColors.primary,
-                            onChanged: (v) => setState(() { 
-                              _epSearch = v; 
+                            onChanged: (v) => setState(() {
+                              _epSearch = v;
                               _epPage = 1; // Reset to page 1 on search
                             }),
                           ),
@@ -279,10 +281,13 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                     decoration: BoxDecoration(
                       color: AppColors.cardBg,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05)),
                     ),
                     child: Icon(
-                      _isGridMode ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                      _isGridMode
+                          ? Icons.view_list_rounded
+                          : Icons.grid_view_rounded,
                       color: AppColors.primary,
                       size: 18,
                     ),
@@ -303,14 +308,18 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
                   child: Row(
                     children: [
                       Icon(
-                        _epSort == 'asc' ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, 
-                        color: AppColors.primary, 
-                        size: 14
-                      ),
+                          _epSort == 'asc'
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          color: AppColors.primary,
+                          size: 14),
                       const SizedBox(width: 4),
                       Text(
                         _epSort == 'asc' ? 'Oldest First' : 'Newest First',
-                        style: GoogleFonts.inter(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.inter(
+                            color: AppColors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -328,7 +337,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   }
 
   Widget _buildPagination(int totalPages) {
-    if (totalPages <= 1) return const SliverToBoxAdapter(child: SizedBox(height: 10));
+    if (totalPages <= 1)
+      return const SliverToBoxAdapter(child: SizedBox(height: 10));
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -341,7 +351,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.all(8),
-                child: Icon(Icons.chevron_left_rounded, color: _epPage > 1 ? Colors.white : Colors.white24, size: 20),
+                child: Icon(Icons.chevron_left_rounded,
+                    color: _epPage > 1 ? Colors.white : Colors.white24,
+                    size: 20),
               ),
             ),
             Container(
@@ -354,15 +366,21 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               ),
               child: Text(
                 'Page $_epPage / $totalPages',
-                style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12),
               ),
             ),
             InkWell(
-              onTap: _epPage < totalPages ? () => setState(() => _epPage++) : null,
+              onTap:
+                  _epPage < totalPages ? () => setState(() => _epPage++) : null,
               borderRadius: BorderRadius.circular(20),
               child: Container(
                 padding: const EdgeInsets.all(8),
-                child: Icon(Icons.chevron_right_rounded, color: _epPage < totalPages ? Colors.white : Colors.white24, size: 20),
+                child: Icon(Icons.chevron_right_rounded,
+                    color: _epPage < totalPages ? Colors.white : Colors.white24,
+                    size: 20),
               ),
             ),
           ],
@@ -390,7 +408,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       if (!mounted) return;
       setState(() {
         _isPipActive = true;
@@ -446,15 +465,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     _showSystemUI();
   }
 
-
-
   // ========== SYSTEM UI ==========
   void _hideSystemUI() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   void _showSystemUI() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+        overlays: SystemUiOverlay.values);
   }
 
   void _enableWakelock() {
@@ -470,14 +488,16 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _subtitleFontSize = prefs.getDouble('subtitle_font_size') ?? 12.0; // Default 12px
-        _subtitleBackgroundOpacity = prefs.getDouble('subtitle_bg_opacity') ?? 0.5;
+        _subtitleFontSize =
+            prefs.getDouble('subtitle_font_size') ?? 12.0; // Default 12px
+        _subtitleBackgroundOpacity =
+            prefs.getDouble('subtitle_bg_opacity') ?? 0.5;
         _subtitleOffset = prefs.getDouble('subtitle_offset') ?? 80.0;
         final colorValue = prefs.getInt('subtitle_color');
         if (colorValue != null) _subtitleColor = Color(colorValue);
-        
+
         // Load preferred languages (default to English + Indo AI if not set)
-        _selectedSubtitleLang = prefs.getString('subtitle_lang') ?? 'English'; 
+        _selectedSubtitleLang = prefs.getString('subtitle_lang') ?? 'English';
         _selectedAILang = prefs.getString('ai_lang') ?? 'id';
         _globalPlayerProvider.setAISettings(_selectedAILang);
       });
@@ -498,42 +518,43 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _loadEpisodeAndPlay() async {
     if (_currentEpisode == null) return;
 
-    debugPrint('🎬 [PLAYER] Loading Episode: ${widget.animeTitle} - ${_currentEpisode?.number}');
+    debugPrint(
+        '🎬 [PLAYER] Loading Episode: ${widget.animeTitle} - ${_currentEpisode?.number}');
 
     // Check if we are already playing this episode in background
-    if (_globalPlayerProvider.isInitialized && 
+    if (_globalPlayerProvider.isInitialized &&
         _globalPlayerProvider.currentEpisode?.url == _currentEpisode!.url) {
-        
-        debugPrint('🚀 [PLAYER] BYPASS: Reusing existing global player instance (No reload)');
-        
-        // Just attach UI to existing player
-        setState(() {
-            _mediaKitPlayer = _globalPlayerProvider.player;
-            _mediaKitVideoController = _globalPlayerProvider.controller;
-            _isPlayerInitialized = true;
-            _isLoadingEpisode = false;
-            
-            // Sync subtitle state from provider
-            _selectedSubtitleLang = _globalPlayerProvider.selectedSubtitleLang;
-            _currentSubtitle = _globalPlayerProvider.currentSubtitle;
-            _subtitles = _globalPlayerProvider.subtitles.cast<ParsedSubtitle>();
-            
-            // Re-fetch additional data if needed (subs/qualities) but DON'T restart player
-            // Metadata is fast to reload if needed for UI lists
-        });
-        
-        // Re-setup listener
-        _positionSubscription?.cancel();
-        _positionSubscription = _mediaKitPlayer!.stream.position.listen((position) {
-          if (mounted && _globalPlayerProvider.subtitles.isNotEmpty) {
-            _updateSubtitle(position);
-          }
-          _checkAutoPlay(position);
-        });
-        
-        return; 
-    }
+      debugPrint(
+          '🚀 [PLAYER] BYPASS: Reusing existing global player instance (No reload)');
 
+      // Just attach UI to existing player
+      setState(() {
+        _mediaKitPlayer = _globalPlayerProvider.player;
+        _mediaKitVideoController = _globalPlayerProvider.controller;
+        _isPlayerInitialized = true;
+        _isLoadingEpisode = false;
+
+        // Sync subtitle state from provider
+        _selectedSubtitleLang = _globalPlayerProvider.selectedSubtitleLang;
+        _currentSubtitle = _globalPlayerProvider.currentSubtitle;
+        _subtitles = _globalPlayerProvider.subtitles.cast<ParsedSubtitle>();
+
+        // Re-fetch additional data if needed (subs/qualities) but DON'T restart player
+        // Metadata is fast to reload if needed for UI lists
+      });
+
+      // Re-setup listener
+      _positionSubscription?.cancel();
+      _positionSubscription =
+          _mediaKitPlayer!.stream.position.listen((position) {
+        if (mounted && _globalPlayerProvider.subtitles.isNotEmpty) {
+          _updateSubtitle(position);
+        }
+        _checkAutoPlay(position);
+      });
+
+      return;
+    }
 
     setState(() {
       _isLoadingEpisode = true;
@@ -545,8 +566,10 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       final episodeId = _currentEpisode!.url;
       final stopwatch = Stopwatch()..start();
       debugPrint('⏳ [PLAYER] Fetching stream qualities for $episodeId...');
-      final streamData = await ZoroService().getQualities(episodeId, dub: _audioType == 'dub');
-      debugPrint('✅ [PLAYER] Qualities fetched in ${stopwatch.elapsedMilliseconds}ms');
+      final streamData =
+          await ZoroService().getQualities(episodeId, dub: _audioType == 'dub');
+      debugPrint(
+          '✅ [PLAYER] Qualities fetched in ${stopwatch.elapsedMilliseconds}ms');
 
       if (streamData == null || !mounted) {
         throw Exception('Failed to load stream');
@@ -555,7 +578,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       // Parse sources
       final sources = streamData['sources'] as List? ?? [];
       final qualities = <StreamLink>[];
-      
+
       for (var source in sources) {
         if (source is Map) {
           qualities.add(StreamLink(
@@ -570,13 +593,17 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       // Parse subtitles
       final subtitles = streamData['subtitles'] as List? ?? [];
       final availableSubs = <Map<String, String>>[];
-      
+
       for (var sub in subtitles) {
         if (sub is Map) {
           availableSubs.add({
             'url': sub['url']?.toString() ?? '',
-            'lang': sub['lang']?.toString() ?? sub['label']?.toString() ?? 'Unknown',
-            'label': sub['label']?.toString() ?? sub['lang']?.toString() ?? 'Unknown',
+            'lang': sub['lang']?.toString() ??
+                sub['label']?.toString() ??
+                'Unknown',
+            'label': sub['label']?.toString() ??
+                sub['lang']?.toString() ??
+                'Unknown',
           });
         }
       }
@@ -605,7 +632,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           _isLoadingEpisode = false;
           _currentStreamLink = initialQuality;
         });
-        
+
         // Update Global Provider Metadata & SMTC
         if (_currentStreamLink != null) {
           _globalPlayerProvider.updateMetadata(
@@ -625,22 +652,24 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           );
 
           if (matchingSub.isNotEmpty && prevLang != 'Off') {
-             _loadSubtitle(prevLang);
+            _loadSubtitle(prevLang);
           } else {
-             // Fallback to English if preferred not found, or maintain 'Off'
-             final fallback = availableSubs.firstWhere(
-                (s) => s['label']?.contains('English') == true || s['lang']?.contains('English') == true,
-                orElse: () => {},
-             );
-             
-             if (fallback.isNotEmpty) {
-               _selectedSubtitleLang = fallback['label'] ?? 'English';
-               _loadSubtitle(_selectedSubtitleLang);
-             } else {
-               _subtitles = [];
-               _currentSubtitle = '';
-               _selectedSubtitleLang = 'Off';
-             }
+            // Fallback to English if preferred not found, or maintain 'Off'
+            final fallback = availableSubs.firstWhere(
+              (s) =>
+                  s['label']?.contains('English') == true ||
+                  s['lang']?.contains('English') == true,
+              orElse: () => {},
+            );
+
+            if (fallback.isNotEmpty) {
+              _selectedSubtitleLang = fallback['label'] ?? 'English';
+              _loadSubtitle(_selectedSubtitleLang);
+            } else {
+              _subtitles = [];
+              _currentSubtitle = '';
+              _selectedSubtitleLang = 'Off';
+            }
           }
 
           await _initializePlayer();
@@ -660,11 +689,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   // ========== PLAYER INITIALIZATION ==========
   Future<void> _initializePlayer() async {
     if (_currentStreamLink == null || !mounted) return;
-    
+
     // Ensure Global Player is ready
     if (!_globalPlayerProvider.isInitialized) {
-       debugPrint('⚠️ [PLAYER] Provider not initialized, waiting 500ms...');
-       await Future.delayed(const Duration(milliseconds: 500));
+      debugPrint('⚠️ [PLAYER] Provider not initialized, waiting 500ms...');
+      await Future.delayed(const Duration(milliseconds: 500));
     }
 
     setState(() {
@@ -673,7 +702,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         _isLoadingPlayer = true;
       }
       _hasError = false;
-      _isPlayerInitialized = _mediaKitPlayer != null; // Keep current frame if switching quality
+      _isPlayerInitialized =
+          _mediaKitPlayer != null; // Keep current frame if switching quality
     });
 
     try {
@@ -682,20 +712,24 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       _mediaKitVideoController = _globalPlayerProvider.controller;
 
       debugPrint('🎬 [PLAYER] Opening media: ${_currentStreamLink?.url}');
-      final headers = _currentStreamLink?.headers ?? 
-          (_currentHeaders.isNotEmpty 
-              ? _currentHeaders 
-              : {'User-Agent': 'Sukinime/2.0', 'Referer': 'https://hianime.to/'});
+      final headers = _currentStreamLink?.headers ??
+          (_currentHeaders.isNotEmpty
+              ? _currentHeaders
+              : {
+                  'User-Agent': 'Sukinime/2.0',
+                  'Referer': 'https://hianime.to/'
+                });
 
       // Capture current position before switching stream (for quality change)
       final currentPosition = _mediaKitPlayer!.state.position;
-      final shouldRestorePosition = currentPosition > Duration.zero && _mediaKitPlayer!.state.playing;
+      final shouldRestorePosition =
+          currentPosition > Duration.zero && _mediaKitPlayer!.state.playing;
 
       await _mediaKitPlayer!.open(
         Media(_currentStreamLink!.url, httpHeaders: headers),
         play: true,
       );
-      
+
       // Restore position if switching quality
       if (shouldRestorePosition) {
         await _mediaKitPlayer!.seek(currentPosition);
@@ -703,15 +737,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
       // Cancel previous position subscription if it exists to prevent duplicates
       _positionSubscription?.cancel();
-      
+
       // Setup position listener for subtitles
-      _positionSubscription = _mediaKitPlayer!.stream.position.listen((position) {
+      _positionSubscription =
+          _mediaKitPlayer!.stream.position.listen((position) {
         if (mounted && _globalPlayerProvider.subtitles.isNotEmpty) {
           _updateSubtitle(position);
         }
         _checkAutoPlay(position);
       });
-
 
       if (mounted) {
         setState(() {
@@ -719,10 +753,10 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           _isPlayerInitialized = true;
           _showControls = true;
         });
-        
+
         _startHideTimer();
         _startProgressTracking();
-        
+
         // Defer background tasks after player is ready
         Future.microtask(() {
           if (mounted) {
@@ -776,6 +810,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       debugPrint('Subtitle load error: $e');
     }
   }
+
   void _updateSubtitle(Duration position) {
     setState(() {
       _currentSubtitle = _globalPlayerProvider.currentSubtitle;
@@ -784,20 +819,16 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   void _prefetchTranslations(int startIndex, int count) {
     if (_subtitles.isEmpty || startIndex >= _subtitles.length) return;
-    
-    final end = (startIndex + count < _subtitles.length) 
-        ? startIndex + count 
+
+    final end = (startIndex + count < _subtitles.length)
+        ? startIndex + count
         : _subtitles.length;
-        
-    final textsToTranslate = _subtitles
-        .sublist(startIndex, end)
-        .map((s) => s.text)
-        .toList();
-        
+
+    final textsToTranslate =
+        _subtitles.sublist(startIndex, end).map((s) => s.text).toList();
+
     TranslationService.batchTranslateTexts(textsToTranslate, _selectedAILang);
   }
-
-
 
   // ========== CONTROLS ==========
   void _toggleControls() {
@@ -836,7 +867,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   void _seekRelative(int seconds) {
     if (!_isPlayerInitialized) return;
-    
+
     if (_mediaKitPlayer != null) {
       final current = _mediaKitPlayer!.state.position;
       _mediaKitPlayer!.seek(current + Duration(seconds: seconds));
@@ -849,7 +880,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   void _seekTo(double milliseconds) {
     if (!_isPlayerInitialized) return;
-    
+
     final position = Duration(milliseconds: milliseconds.toInt());
     if (_mediaKitPlayer != null) {
       _mediaKitPlayer!.seek(position);
@@ -869,18 +900,21 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       _subtitles = [];
       _currentSubtitle = '';
     });
-    
+
     await _saveFinalProgress();
     // We don't dispose players here anymore, _initializePlayer handles it better
     // by reusing them. If switching episodes, we just open new media.
-    
+
     await _loadEpisodeAndPlay();
   }
 
   void _checkAutoPlay(Duration position) {
-    if (!_isPlayerInitialized || _isAutoPlaying || _showNextEpisodeCountdown) return;
+    if (!_isPlayerInitialized || _isAutoPlaying || _showNextEpisodeCountdown)
+      return;
 
-    final duration = _mediaKitPlayer?.state.duration ?? _videoController?.value.duration ?? Duration.zero;
+    final duration = _mediaKitPlayer?.state.duration ??
+        _videoController?.value.duration ??
+        Duration.zero;
     if (duration.inSeconds > 0) {
       final progress = position.inMilliseconds / duration.inMilliseconds;
       if (progress >= 0.98 && hasNextEpisode && _isAutoPlayEnabled) {
@@ -918,7 +952,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
     if (_isAutoPlaying || !hasNextEpisode) return;
     _isAutoPlaying = true;
 
-    final currentIndex = _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode!.url);
+    final currentIndex =
+        _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode!.url);
     final nextEpisode = _localAllEpisodes[currentIndex + 1];
 
     setState(() {
@@ -940,9 +975,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _autoSaveProgress() async {
     if (!_isPlayerInitialized || _currentEpisode == null) return;
 
-    final position = _mediaKitPlayer?.state.position ?? _videoController?.value.position ?? Duration.zero;
-    final duration = _mediaKitPlayer?.state.duration ?? _videoController?.value.duration ?? Duration.zero;
-    final isPlaying = _mediaKitPlayer?.state.playing ?? _videoController?.value.isPlaying ?? false;
+    final position = _mediaKitPlayer?.state.position ??
+        _videoController?.value.position ??
+        Duration.zero;
+    final duration = _mediaKitPlayer?.state.duration ??
+        _videoController?.value.duration ??
+        Duration.zero;
+    final isPlaying = _mediaKitPlayer?.state.playing ??
+        _videoController?.value.isPlaying ??
+        false;
 
     if (!isPlaying || position.inSeconds < 5 || duration.inSeconds < 10) return;
     if (position == _lastSavedPosition) return;
@@ -955,8 +996,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       animeTitle: widget.animeTitle,
       animePoster: widget.animePoster,
       episodeId: _currentEpisode!.url,
-      episodeTitle: _currentEpisode!.title ?? 'Episode ${_currentEpisode!.number}',
-      episodeNumber: _currentEpisode!.episodeNumber ?? int.tryParse(_currentEpisode!.number) ?? 1,
+      episodeTitle:
+          _currentEpisode!.title ?? 'Episode ${_currentEpisode!.number}',
+      episodeNumber: _currentEpisode!.episodeNumber ??
+          int.tryParse(_currentEpisode!.number) ??
+          1,
       currentPosition: position,
       totalDuration: duration,
     );
@@ -967,8 +1011,12 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _saveFinalProgress() async {
     if (_currentEpisode == null) return;
 
-    final position = _mediaKitPlayer?.state.position ?? _videoController?.value.position ?? Duration.zero;
-    final duration = _mediaKitPlayer?.state.duration ?? _videoController?.value.duration ?? Duration.zero;
+    final position = _mediaKitPlayer?.state.position ??
+        _videoController?.value.position ??
+        Duration.zero;
+    final duration = _mediaKitPlayer?.state.duration ??
+        _videoController?.value.duration ??
+        Duration.zero;
 
     if (duration.inSeconds > 0) {
       await WatchHistoryService.saveWatchProgress(
@@ -976,8 +1024,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         animeTitle: widget.animeTitle,
         animePoster: widget.animePoster,
         episodeId: _currentEpisode!.url,
-        episodeTitle: _currentEpisode!.title ?? 'Episode ${_currentEpisode!.number}',
-        episodeNumber: _currentEpisode!.episodeNumber ?? int.tryParse(_currentEpisode!.number) ?? 1,
+        episodeTitle:
+            _currentEpisode!.title ?? 'Episode ${_currentEpisode!.number}',
+        episodeNumber: _currentEpisode!.episodeNumber ??
+            int.tryParse(_currentEpisode!.number) ??
+            1,
         watchedDuration: position,
         totalDuration: duration,
       );
@@ -987,7 +1038,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
   Future<void> _loadWatchProgress() async {
     if (_currentEpisode == null) return;
 
-    final progress = await WatchHistoryService.getEpisodeProgress(widget.animeId, _currentEpisode!.url);
+    final progress = await WatchHistoryService.getEpisodeProgress(
+        widget.animeId, _currentEpisode!.url);
     if (progress != null && progress.watchedDuration.inSeconds > 5 && mounted) {
       // ✅ Parity: Auto-resume directly without popup if it's the same episode
       _seekTo(progress.watchedDuration.inMilliseconds.toDouble());
@@ -996,12 +1048,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
 
   // ========== HELPERS ==========
   bool get hasNextEpisode {
-    final currentIndex = _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode?.url);
+    final currentIndex =
+        _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode?.url);
     return currentIndex != -1 && currentIndex < _localAllEpisodes.length - 1;
   }
 
   bool get hasPrevEpisode {
-    final currentIndex = _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode?.url);
+    final currentIndex =
+        _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode?.url);
     return currentIndex > 0;
   }
 
@@ -1024,7 +1078,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       canPop: !_isFullScreen && !_isLocked,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        
+
         if (_isLocked) {
           // Locked - prevent exit
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1044,182 +1098,185 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         }
       },
       child: Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _toggleControls,
-        onVerticalDragStart: (details) {
-          if (_isLocked) return;
-          final width = MediaQuery.of(context).size.width;
-          _dragStartY = details.globalPosition.dy;
-          if (details.globalPosition.dx < width / 2) {
-            _isDraggingBrightness = true;
-            _dragStartValue = _currentBrightness;
-          } else {
-            _isDraggingVolume = true;
-            _dragStartValue = _currentVolume;
-          }
-        },
-        onVerticalDragUpdate: (details) async {
-          if (_isLocked) return;
-          final height = MediaQuery.of(context).size.height;
-          final delta = (_dragStartY - details.globalPosition.dy) / height;
-          final newValue = (_dragStartValue + delta).clamp(0.0, 1.0);
-
-          if (_isDraggingBrightness) {
-            setState(() {
-              _currentBrightness = newValue;
-              _showBrightnessIndicator = true;
-            });
-            await ScreenBrightness().setApplicationScreenBrightness(newValue);
-          } else if (_isDraggingVolume) {
-            setState(() {
-              _currentVolume = newValue;
-              _showVolumeIndicator = true;
-            });
-            VolumeController.instance.setVolume(newValue);
-          }
-          _startIndicatorTimer();
-        },
-        onVerticalDragEnd: (_) {
-          _isDraggingBrightness = false;
-          _isDraggingVolume = false;
-        },
-        onDoubleTapDown: (details) {
-          if (_isLocked) return;
-          final width = MediaQuery.of(context).size.width;
-          final tapX = details.globalPosition.dx;
-          
-          bool isForward = false;
-          if (tapX < width / 3) {
-            isForward = false;
-          } else if (tapX > width * 2 / 3) {
-            isForward = true;
-          } else {
-            return; // Ignore middle taps
-          }
-
-          // Accumulate seek duration
-          final baseSeek = const Duration(seconds: 10);
-          setState(() {
-            if (_showSeekOverlay && _isSeekForward == isForward) {
-              // Add to existing
-              _seekOverlayDuration += baseSeek;
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          onTap: _toggleControls,
+          onVerticalDragStart: (details) {
+            if (_isLocked) return;
+            final width = MediaQuery.of(context).size.width;
+            _dragStartY = details.globalPosition.dy;
+            if (details.globalPosition.dx < width / 2) {
+              _isDraggingBrightness = true;
+              _dragStartValue = _currentBrightness;
             } else {
-              // New seek
-              _seekOverlayDuration = baseSeek;
-              _isSeekForward = isForward;
-              _showSeekOverlay = true;
+              _isDraggingVolume = true;
+              _dragStartValue = _currentVolume;
             }
-          });
+          },
+          onVerticalDragUpdate: (details) async {
+            if (_isLocked) return;
+            final height = MediaQuery.of(context).size.height;
+            final delta = (_dragStartY - details.globalPosition.dy) / height;
+            final newValue = (_dragStartValue + delta).clamp(0.0, 1.0);
 
-          // Reset timer
-          _seekOverlayTimer?.cancel();
-          _seekOverlayTimer = Timer(const Duration(milliseconds: 1500), () {
-             if (mounted) {
-               setState(() => _showSeekOverlay = false);
-             }
-          });
+            if (_isDraggingBrightness) {
+              setState(() {
+                _currentBrightness = newValue;
+                _showBrightnessIndicator = true;
+              });
+              await ScreenBrightness().setApplicationScreenBrightness(newValue);
+            } else if (_isDraggingVolume) {
+              setState(() {
+                _currentVolume = newValue;
+                _showVolumeIndicator = true;
+              });
+              VolumeController.instance.setVolume(newValue);
+            }
+            _startIndicatorTimer();
+          },
+          onVerticalDragEnd: (_) {
+            _isDraggingBrightness = false;
+            _isDraggingVolume = false;
+          },
+          onDoubleTapDown: (details) {
+            if (_isLocked) return;
+            final width = MediaQuery.of(context).size.width;
+            final tapX = details.globalPosition.dx;
 
-          // Perform Seek
-          _seekRelative(isForward ? 10 : -10);
-        },
-        onLongPressStart: (_) {
-          if (_isLocked) return;
-          setState(() {
-            _isSpeedUp = true;
-          });
-          _mediaKitPlayer?.setRate(2.0);
-          _videoController?.setPlaybackSpeed(2.0);
-        },
-        onLongPressEnd: (_) {
-          if (_isLocked) return;
-          setState(() {
-            _isSpeedUp = false;
-          });
-          // Restore user preference
-          _mediaKitPlayer?.setRate(_playbackSpeed);
-          _videoController?.setPlaybackSpeed(_playbackSpeed);
-        },
-        child: Stack(
-          children: [
-            // Video Player
-            if (_isPlayerInitialized && _mediaKitVideoController != null)
-              _buildPlayerContainer(),
+            bool isForward = false;
+            if (tapX < width / 3) {
+              isForward = false;
+            } else if (tapX > width * 2 / 3) {
+              isForward = true;
+            } else {
+              return; // Ignore middle taps
+            }
 
-            // Loading Indicator
-            if (_isLoadingEpisode || _isLoadingPlayer)
-              const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFF59E0B),
+            // Accumulate seek duration
+            final baseSeek = const Duration(seconds: 10);
+            setState(() {
+              if (_showSeekOverlay && _isSeekForward == isForward) {
+                // Add to existing
+                _seekOverlayDuration += baseSeek;
+              } else {
+                // New seek
+                _seekOverlayDuration = baseSeek;
+                _isSeekForward = isForward;
+                _showSeekOverlay = true;
+              }
+            });
+
+            // Reset timer
+            _seekOverlayTimer?.cancel();
+            _seekOverlayTimer = Timer(const Duration(milliseconds: 1500), () {
+              if (mounted) {
+                setState(() => _showSeekOverlay = false);
+              }
+            });
+
+            // Perform Seek
+            _seekRelative(isForward ? 10 : -10);
+          },
+          onLongPressStart: (_) {
+            if (_isLocked) return;
+            setState(() {
+              _isSpeedUp = true;
+            });
+            _mediaKitPlayer?.setRate(2.0);
+            _videoController?.setPlaybackSpeed(2.0);
+          },
+          onLongPressEnd: (_) {
+            if (_isLocked) return;
+            setState(() {
+              _isSpeedUp = false;
+            });
+            // Restore user preference
+            _mediaKitPlayer?.setRate(_playbackSpeed);
+            _videoController?.setPlaybackSpeed(_playbackSpeed);
+          },
+          child: Stack(
+            children: [
+              // Video Player
+              if (_isPlayerInitialized && _mediaKitVideoController != null)
+                _buildPlayerContainer(),
+
+              // Loading Indicator
+              if (_isLoadingEpisode || _isLoadingPlayer)
+                const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFF59E0B),
+                  ),
                 ),
-              ),
 
-            // Error Message
-            if (_hasError && _errorMessage != null)
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                    const SizedBox(height: 16),
-                    Text(
-                      _errorMessage!,
-                      style: GoogleFonts.inter(color: Colors.white),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _loadEpisodeAndPlay,
-                      child: const Text('Retry'),
-                    ),
-                  ],
+              // Error Message
+              if (_hasError && _errorMessage != null)
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        style: GoogleFonts.inter(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadEpisodeAndPlay,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-            // Speed Up Overlay (YouTube Style)
-            if (_isSpeedUp)
-              Positioned(
-                top: 40,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                         Text(
-                          '2x Speed',
-                          style: GoogleFonts.inter(
-                            color: Colors.white, 
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+              // Speed Up Overlay (YouTube Style)
+              if (_isSpeedUp)
+                Positioned(
+                  top: 40,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '2x Speed',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.fast_forward_rounded, color: Colors.white, size: 16),
-                      ],
+                          const SizedBox(width: 4),
+                          const Icon(Icons.fast_forward_rounded,
+                              color: Colors.white, size: 16),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-             // Double Tap Seek Overlay
-            if (_showSeekOverlay)
-              VideoPlayerSeekingOverlay(
-                duration: _seekOverlayDuration,
-                isForward: _isSeekForward,
-              ),
-          ],
+              // Double Tap Seek Overlay
+              if (_showSeekOverlay)
+                VideoPlayerSeekingOverlay(
+                  duration: _seekOverlayDuration,
+                  isForward: _isSeekForward,
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildIndicator(IconData icon, double value) {
     return Center(
@@ -1267,13 +1324,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         ),
       );
     }
-    
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait && !_isFullScreen;
-    
+
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait &&
+            !_isFullScreen;
+
     final filteredEpisodes = _getFilteredEpisodes();
     final visibleEpisodes = _getVisibleEpisodes(filteredEpisodes);
     final totalPages = (filteredEpisodes.length / _epsPerPage).ceil();
-    
+
     if (isPortrait) {
       return Column(
         children: [
@@ -1296,92 +1355,109 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               color: AppColors.background,
               child: CustomScrollView(
                 slivers: [
-                   SliverToBoxAdapter(
-                     child: Padding(
-                       padding: const EdgeInsets.all(16),
-                       child: Column(
-                         crossAxisAlignment: CrossAxisAlignment.start,
-                         children: [
-                            Text(widget.animeTitle, style: GoogleFonts.poppins(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Currently Playing: Episode ${_currentEpisode?.number}${_currentEpisode?.title != null ? " - ${_currentEpisode!.title}" : ""}', 
-                              style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 20),
-                            Text('EPISODES', style: GoogleFonts.poppins(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                            const SizedBox(height: 12),
-                         ],
-                       ),
-                     ),
-                   ),
-                   SliverPadding(
-                     padding: EdgeInsets.zero,
-                     sliver: _buildEpisodeControls(),
-                   ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.animeTitle,
+                              style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Currently Playing: Episode ${_currentEpisode?.number}${_currentEpisode?.title != null ? " - ${_currentEpisode!.title}" : ""}',
+                            style: GoogleFonts.inter(
+                                color: AppColors.textMuted, fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 20),
+                          Text('EPISODES',
+                              style: GoogleFonts.poppins(
+                                  color: AppColors.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2)),
+                          const SizedBox(height: 12),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.zero,
+                    sliver: _buildEpisodeControls(),
+                  ),
 
-                   // Episode List / Grid
-                   if (_isGridMode)
-                     SliverPadding(
-                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                       sliver: SliverGrid(
-                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                           crossAxisCount: 5,
-                           mainAxisSpacing: 10,
-                           crossAxisSpacing: 10,
-                           childAspectRatio: 1.0,
-                         ),
-                         delegate: SliverChildBuilderDelegate(
-                           (context, index) {
-                             if (index >= visibleEpisodes.length) return null;
-                             final ep = visibleEpisodes[index];
-                             final isSelected = ep.url == _currentEpisode?.url;
-                             return GestureDetector(
-                               onTap: () => _switchEpisode(ep),
-                               child: Container(
-                                 decoration: BoxDecoration(
-                                   color: isSelected ? AppColors.primary : AppColors.cardBg,
-                                   borderRadius: BorderRadius.circular(8),
-                                   border: Border.all(
-                                     color: isSelected ? AppColors.primary : Colors.white10,
-                                   ),
-                                 ),
-                                 alignment: Alignment.center,
-                                 child: Text(
-                                   ep.number,
-                                   style: GoogleFonts.inter(
-                                     color: isSelected ? Colors.white : Colors.white70,
-                                     fontSize: 14,
-                                     fontWeight: FontWeight.bold,
-                                   ),
-                                 ),
-                               ),
-                             );
-                           },
-                           childCount: visibleEpisodes.length,
-                         ),
-                       ),
-                     )
-                   else
-                     SliverList(
-                       delegate: SliverChildBuilderDelegate(
-                         (context, index) {
+                  // Episode List / Grid
+                  if (_isGridMode)
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 5,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 1.0,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
                             if (index >= visibleEpisodes.length) return null;
                             final ep = visibleEpisodes[index];
                             final isSelected = ep.url == _currentEpisode?.url;
-                            return _buildPortraitEpisodeItem(ep, isSelected);
-                         },
-                         childCount: visibleEpisodes.length,
-                       ),
-                     ),
-                     
-                    // Pagination
-                    _buildPagination(totalPages),
-                    
-                    // Bottom Padding
-                    const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                            return GestureDetector(
+                              onTap: () => _switchEpisode(ep),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.cardBg,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : Colors.white10,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  ep.number,
+                                  style: GoogleFonts.inter(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.white70,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          childCount: visibleEpisodes.length,
+                        ),
+                      ),
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          if (index >= visibleEpisodes.length) return null;
+                          final ep = visibleEpisodes[index];
+                          final isSelected = ep.url == _currentEpisode?.url;
+                          return _buildPortraitEpisodeItem(ep, isSelected);
+                        },
+                        childCount: visibleEpisodes.length,
+                      ),
+                    ),
+
+                  // Pagination
+                  _buildPagination(totalPages),
+
+                  // Bottom Padding
+                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
                 ],
               ),
             ),
@@ -1422,12 +1498,20 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           showControls: _showControls,
           isLocked: _isLocked,
           isFullScreen: _isFullScreen,
-          isPlaying: _mediaKitPlayer?.state.playing ?? _videoController?.value.isPlaying ?? false,
+          isPlaying: _mediaKitPlayer?.state.playing ??
+              _videoController?.value.isPlaying ??
+              false,
           isBuffering: _mediaKitPlayer?.state.buffering ?? false,
           animeTitle: widget.animeTitle,
-          currentEpisodeNumber: _currentEpisode?.episodeNumber ?? int.tryParse(_currentEpisode?.number ?? '1') ?? 1,
-          currentPosition: _mediaKitPlayer?.state.position ?? _videoController?.value.position ?? Duration.zero,
-          totalDuration: _mediaKitPlayer?.state.duration ?? _videoController?.value.duration ?? Duration.zero,
+          currentEpisodeNumber: _currentEpisode?.episodeNumber ??
+              int.tryParse(_currentEpisode?.number ?? '1') ??
+              1,
+          currentPosition: _mediaKitPlayer?.state.position ??
+              _videoController?.value.position ??
+              Duration.zero,
+          totalDuration: _mediaKitPlayer?.state.duration ??
+              _videoController?.value.duration ??
+              Duration.zero,
           hasPrevEpisode: hasPrevEpisode,
           hasNextEpisode: hasNextEpisode,
           onBack: () {
@@ -1438,7 +1522,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               });
             } else {
               // Set full player inactive BEFORE pop so mini player shows
-              Provider.of<GlobalPlayerProvider>(context, listen: false).setFullPlayerActive(false);
+              Provider.of<GlobalPlayerProvider>(context, listen: false)
+                  .setFullPlayerActive(false);
               Navigator.pop(context);
             }
           },
@@ -1453,13 +1538,15 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           onSeekBackward: () => _seekRelative(-10),
           onSeekForward: () => _seekRelative(10),
           onPrevEpisode: () {
-            final currentIndex = _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode?.url);
+            final currentIndex = _localAllEpisodes
+                .indexWhere((e) => e.url == _currentEpisode?.url);
             if (currentIndex > 0) {
               _switchEpisode(_localAllEpisodes[currentIndex - 1]);
             }
           },
           onNextEpisode: () {
-            final currentIndex = _localAllEpisodes.indexWhere((e) => e.url == _currentEpisode?.url);
+            final currentIndex = _localAllEpisodes
+                .indexWhere((e) => e.url == _currentEpisode?.url);
             if (currentIndex < _localAllEpisodes.length - 1) {
               _switchEpisode(_localAllEpisodes[currentIndex + 1]);
             }
@@ -1483,10 +1570,12 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           allEpisodes: _localAllEpisodes,
           onEpisodeSelected: _switchEpisode,
           // Dropdown settings data
-          availableQualities: _allAvailableQualities.map((q) => {
-            'quality': q.quality ?? 'auto',
-            'label': q.quality ?? 'auto',
-          }).toList(),
+          availableQualities: _allAvailableQualities
+              .map((q) => {
+                    'quality': q.quality ?? 'auto',
+                    'label': q.quality ?? 'auto',
+                  })
+              .toList(),
           selectedQuality: _currentStreamLink?.quality ?? 'auto',
           availableSubtitles: _availableSubtitles,
           selectedSubtitle: _selectedSubtitleLang,
@@ -1517,7 +1606,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
             setState(() {
               _selectedAILang = lang;
               if (lang != 'none' && _currentSubtitle.isNotEmpty) {
-                _updateSubtitle(_mediaKitPlayer?.state.position ?? _videoController?.value.position ?? Duration.zero);
+                _updateSubtitle(_mediaKitPlayer?.state.position ??
+                    _videoController?.value.position ??
+                    Duration.zero);
               }
             });
             _savePlayerSettings(); // Save preference
@@ -1531,7 +1622,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           subtitleSize: _subtitleFontSize,
           subtitleOffset: _subtitleOffset,
           subtitleOpacity: _subtitleBackgroundOpacity,
-          subtitleColor: '#${_subtitleColor.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
+          subtitleColor:
+              '#${_subtitleColor.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
           onSubtitleSizeChanged: (size) {
             setState(() => _subtitleFontSize = size);
             _savePlayerSettings();
@@ -1549,7 +1641,8 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               if (colorStr == 'white') {
                 _subtitleColor = Colors.white;
               } else {
-                _subtitleColor = Color(int.parse(colorStr.replaceFirst('#', '0xFF')));
+                _subtitleColor =
+                    Color(int.parse(colorStr.replaceFirst('#', '0xFF')));
               }
             });
             _savePlayerSettings();
@@ -1590,7 +1683,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         if (_showBrightnessIndicator)
           _buildIndicator(Icons.brightness_7, _currentBrightness),
         if (_showVolumeIndicator)
-          _buildIndicator(_currentVolume > 0 ? Icons.volume_up : Icons.volume_off, _currentVolume),
+          _buildIndicator(
+              _currentVolume > 0 ? Icons.volume_up : Icons.volume_off,
+              _currentVolume),
       ],
     );
   }
@@ -1602,9 +1697,14 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : AppColors.cardBg,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : AppColors.cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AppColors.primary.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.05)),
         ),
         child: Row(
           children: [
@@ -1612,7 +1712,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.1),
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -1630,7 +1732,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               child: Text(
                 ep.title ?? 'Episode ${ep.number}',
                 style: GoogleFonts.inter(
-                  color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.8),
+                  color: isSelected
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.8),
                   fontSize: 14,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
@@ -1639,9 +1743,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
               ),
             ),
             if (isSelected)
-              const Icon(Icons.play_circle_fill, color: AppColors.primary, size: 20)
+              const Icon(Icons.play_circle_fill,
+                  color: AppColors.primary, size: 20)
             else
-              const Icon(Icons.play_circle_outline, color: Colors.white24, size: 20),
+              const Icon(Icons.play_circle_outline,
+                  color: Colors.white24, size: 20),
           ],
         ),
       ),
@@ -1653,10 +1759,12 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
       context: context,
       barrierColor: Colors.transparent,
       builder: (context) => VideoPlayerSettingsModal(
-        availableQualities: _allAvailableQualities.map((q) => {
-          'quality': q.quality ?? 'auto',
-          'label': q.quality ?? 'auto',
-        }).toList(),
+        availableQualities: _allAvailableQualities
+            .map((q) => {
+                  'quality': q.quality ?? 'auto',
+                  'label': q.quality ?? 'auto',
+                })
+            .toList(),
         selectedQuality: _currentStreamLink?.quality ?? 'auto',
         availableSubtitles: _availableSubtitles,
         selectedSubtitle: _selectedSubtitleLang,
@@ -1666,11 +1774,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
         subtitleColor: _subtitleColor,
         subtitleOpacity: _subtitleBackgroundOpacity,
         subtitleOffset: _subtitleOffset,
-        
+
         // New Features
         playbackSpeed: _playbackSpeed,
         isAutoPlayEnabled: _isAutoPlayEnabled,
-        
+
         onQualitySelected: (quality) {
           final selected = _allAvailableQualities.firstWhere(
             (q) => q.quality == quality,
@@ -1699,7 +1807,9 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           setState(() {
             _selectedAILang = lang;
             if (lang != 'none' && _currentSubtitle.isNotEmpty) {
-               _updateSubtitle(_mediaKitPlayer?.state.position ?? _videoController?.value.position ?? Duration.zero);
+              _updateSubtitle(_mediaKitPlayer?.state.position ??
+                  _videoController?.value.position ??
+                  Duration.zero);
             }
           });
           Navigator.pop(context);
@@ -1735,7 +1845,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           });
           _savePlayerSettings();
         },
-        
+
         // New Feature Callbacks
         onPlaybackSpeedChanged: (speed) {
           setState(() {
@@ -1751,7 +1861,7 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer> with WidgetsBinding
           });
           // No need to close modal for toggle
         },
-        
+
         onClose: () {
           Navigator.pop(context);
         },

@@ -128,7 +128,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
     try {
       final keyword = query.trim().replaceAll(' ', '+');
-      final url = 'https://api.animo.qzz.io/api/v1/search?keyword=$keyword&page=$page';
+      final url = 'https://hianime-api-seven-steel.vercel.app/api/v1/search?keyword=$keyword&page=$page';
       
       final response = await http.get(Uri.parse(url));
       
