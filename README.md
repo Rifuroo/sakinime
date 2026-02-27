@@ -53,7 +53,7 @@ Sakinime menggunakan palet warna yang dikurasi untuk kenyamanan mata dan estetik
 
 - **State Management**: Implementasi kustom menggunakan **Provider** untuk reaktivitas data yang efisien.
 - **Networking Layer**: Menggunakan **Dio** dengan interceptor kustom untuk penanganan error dan mekanisme *safe-retry*.
-- **API Architecture**: Komunikasi *real-time* dengan scraper kustom [`hianime-api`](https://github.com/ryanwtf88/hianime-api) v2.0.0.
+- **API Architecture**: Komunikasi *real-time* dengan scraper kustom [`hianime-api`](https://github.com/dksmadboy/hianime-api) dan [`Otakudesu & Kuramanime`](https://github.com/wajik45/wajik-anime-api)
 - **Scraping logic**: Penanganan cerdas untuk ekstraksi URL video dan enkripsi data server.
 
 ---
