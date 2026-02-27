@@ -20,8 +20,8 @@ import 'package:screen_brightness/screen_brightness.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 import '../models/anime_model.dart';
-import '../services/zoro_service.dart';
 import '../services/anime_service.dart';
+import '../providers/anime_provider.dart';
 import '../services/subtitle_parser_service.dart';
 import '../services/watch_history_service.dart';
 import '../services/translation_service.dart';
@@ -68,7 +68,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
   List<Episode> _localAllEpisodes = [];
   StreamLink? _currentStreamLink;
   List<StreamLink> _allAvailableQualities = [];
-  Map<String, String> _currentHeaders = {};
 
   // Subtitles
   List<ParsedSubtitle> _subtitles = [];
@@ -391,11 +390,27 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
 
   Future<void> _fetchFullEpisodeList() async {
     try {
-      final episodes = await AnimeService().getEpisodes(widget.animeId);
-      if (episodes.isNotEmpty && mounted) {
-        setState(() {
-          _localAllEpisodes = episodes;
-        });
+      final provider = Provider.of<AnimeProvider>(context, listen: false);
+
+      if (provider.isHiAnime) {
+        final episodes = await AnimeService().getEpisodes(widget.animeId);
+        if (episodes.isNotEmpty && mounted) {
+          setState(() {
+            _localAllEpisodes = episodes;
+          });
+        }
+      } else {
+        // For Indo sources, we ensure provider has the latest data
+        if (provider.currentAnime == null ||
+            provider.currentAnime!.id != widget.animeId) {
+          await provider.fetchAnimeDetail(widget.animeId);
+        }
+
+        if (mounted && provider.currentAnime != null) {
+          setState(() {
+            _localAllEpisodes = provider.currentAnime!.episodes;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error fetching full episode list: $e');
@@ -521,29 +536,23 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
     debugPrint(
         '🎬 [PLAYER] Loading Episode: ${widget.animeTitle} - ${_currentEpisode?.number}');
 
-    // Check if we are already playing this episode in background
+    // Check if we already have this episode playing in background
     if (_globalPlayerProvider.isInitialized &&
         _globalPlayerProvider.currentEpisode?.url == _currentEpisode!.url) {
       debugPrint(
           '🚀 [PLAYER] BYPASS: Reusing existing global player instance (No reload)');
 
-      // Just attach UI to existing player
       setState(() {
         _mediaKitPlayer = _globalPlayerProvider.player;
         _mediaKitVideoController = _globalPlayerProvider.controller;
         _isPlayerInitialized = true;
         _isLoadingEpisode = false;
 
-        // Sync subtitle state from provider
         _selectedSubtitleLang = _globalPlayerProvider.selectedSubtitleLang;
         _currentSubtitle = _globalPlayerProvider.currentSubtitle;
         _subtitles = _globalPlayerProvider.subtitles.cast<ParsedSubtitle>();
-
-        // Re-fetch additional data if needed (subs/qualities) but DON'T restart player
-        // Metadata is fast to reload if needed for UI lists
       });
 
-      // Re-setup listener
       _positionSubscription?.cancel();
       _positionSubscription =
           _mediaKitPlayer!.stream.position.listen((position) {
@@ -563,77 +572,67 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
     });
 
     try {
+      final animeProvider = Provider.of<AnimeProvider>(context, listen: false);
       final episodeId = _currentEpisode!.url;
       final stopwatch = Stopwatch()..start();
-      debugPrint('⏳ [PLAYER] Fetching stream qualities for $episodeId...');
-      final streamData =
-          await ZoroService().getQualities(episodeId, dub: _audioType == 'dub');
+
       debugPrint(
-          '✅ [PLAYER] Qualities fetched in ${stopwatch.elapsedMilliseconds}ms');
+          '⏳ [PLAYER] Fetching stream links for $episodeId via AnimeProvider...');
+      await animeProvider.fetchStreamingLinks(episodeId);
+      debugPrint(
+          '✅ [PLAYER] Links fetched in ${stopwatch.elapsedMilliseconds}ms');
 
-      if (streamData == null || !mounted) {
-        throw Exception('Failed to load stream');
+      if (animeProvider.currentStreamLinks.isEmpty) {
+        throw Exception(animeProvider.errorMessage ?? 'Failed to load stream');
       }
 
-      // Parse sources
-      final sources = streamData['sources'] as List? ?? [];
-      final qualities = <StreamLink>[];
+      final qualities = animeProvider.currentStreamLinks;
 
-      for (var source in sources) {
-        if (source is Map) {
-          qualities.add(StreamLink(
-            provider: 'Primary',
-            url: source['url']?.toString() ?? '',
-            quality: source['quality']?.toString() ?? 'auto',
-            type: source['type']?.toString() ?? 'hls',
-          ));
+      // Parse subtitles if available (HiAnime specific or common field)
+      final List<Map<String, String>> availableSubs = [];
+      if (animeProvider.currentEpisodeData != null &&
+          animeProvider.currentEpisodeData!['subtitles'] is List) {
+        final subtitles =
+            animeProvider.currentEpisodeData!['subtitles'] as List;
+        for (var sub in subtitles) {
+          if (sub is Map) {
+            availableSubs.add({
+              'url': sub['url']?.toString() ?? '',
+              'lang': sub['lang']?.toString() ??
+                  sub['label']?.toString() ??
+                  'Unknown',
+              'label': sub['label']?.toString() ??
+                  sub['lang']?.toString() ??
+                  'Unknown',
+            });
+          }
         }
       }
-
-      // Parse subtitles
-      final subtitles = streamData['subtitles'] as List? ?? [];
-      final availableSubs = <Map<String, String>>[];
-
-      for (var sub in subtitles) {
-        if (sub is Map) {
-          availableSubs.add({
-            'url': sub['url']?.toString() ?? '',
-            'lang': sub['lang']?.toString() ??
-                sub['label']?.toString() ??
-                'Unknown',
-            'label': sub['label']?.toString() ??
-                sub['lang']?.toString() ??
-                'Unknown',
-          });
-        }
-      }
-
-      // Parse headers
-      final headers = streamData['headers'] as Map? ?? {};
-      final parsedHeaders = <String, String>{};
-      headers.forEach((key, value) {
-        parsedHeaders[key.toString()] = value.toString();
-      });
 
       if (mounted) {
-        // Select default quality (360p preferred for speed)
+        // Select default quality
         StreamLink? initialQuality;
         if (qualities.isNotEmpty) {
+          // 1. Priority: Main/Default player (already resolved in many cases)
           initialQuality = qualities.firstWhere(
-            (q) => q.quality?.contains('360') == true,
-            orElse: () => qualities.first,
+            (q) =>
+                q.provider.toLowerCase().contains('main') ||
+                q.quality == 'Default',
+            orElse: () => qualities.firstWhere(
+              (q) => q.quality?.contains('360') == true,
+              orElse: () => qualities.first,
+            ),
           );
         }
 
         setState(() {
           _allAvailableQualities = qualities;
           _availableSubtitles = availableSubs;
-          _currentHeaders = parsedHeaders;
           _isLoadingEpisode = false;
           _currentStreamLink = initialQuality;
+          // Headers are now inside StreamLink objects
         });
 
-        // Update Global Provider Metadata & SMTC
         if (_currentStreamLink != null) {
           _globalPlayerProvider.updateMetadata(
             episode: _currentEpisode,
@@ -641,35 +640,38 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
             poster: widget.animePoster,
             animeId: widget.animeId,
           );
-        }
 
-        if (_currentStreamLink != null) {
-          // Check if previous subtitle preference exists in new list
-          final prevLang = _selectedSubtitleLang;
-          final matchingSub = availableSubs.firstWhere(
-            (s) => s['label'] == prevLang || s['lang'] == prevLang,
-            orElse: () => {},
-          );
-
-          if (matchingSub.isNotEmpty && prevLang != 'Off') {
-            _loadSubtitle(prevLang);
-          } else {
-            // Fallback to English if preferred not found, or maintain 'Off'
-            final fallback = availableSubs.firstWhere(
-              (s) =>
-                  s['label']?.contains('English') == true ||
-                  s['lang']?.contains('English') == true,
+          // Handle subtitles logic
+          if (availableSubs.isNotEmpty) {
+            final prevLang = _selectedSubtitleLang;
+            final matchingSub = availableSubs.firstWhere(
+              (s) => s['label'] == prevLang || s['lang'] == prevLang,
               orElse: () => {},
             );
 
-            if (fallback.isNotEmpty) {
-              _selectedSubtitleLang = fallback['label'] ?? 'English';
-              _loadSubtitle(_selectedSubtitleLang);
+            if (matchingSub.isNotEmpty && prevLang != 'Off') {
+              _loadSubtitle(prevLang);
             } else {
-              _subtitles = [];
-              _currentSubtitle = '';
-              _selectedSubtitleLang = 'Off';
+              final fallback = availableSubs.firstWhere(
+                (s) =>
+                    s['label']?.contains('English') == true ||
+                    s['lang']?.contains('English') == true,
+                orElse: () => {},
+              );
+
+              if (fallback.isNotEmpty) {
+                _selectedSubtitleLang = fallback['label'] ?? 'English';
+                _loadSubtitle(_selectedSubtitleLang);
+              } else {
+                _subtitles = [];
+                _currentSubtitle = '';
+                _selectedSubtitleLang = 'Off';
+              }
             }
+          } else {
+            _subtitles = [];
+            _currentSubtitle = '';
+            _selectedSubtitleLang = 'Off';
           }
 
           await _initializePlayer();
@@ -707,18 +709,38 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
     });
 
     try {
+      final provider = Provider.of<AnimeProvider>(context, listen: false);
+
+      // Resolve serverId if needed (OtakuDesu/Indo mirror links)
+      if (!_currentStreamLink!.url.startsWith('http')) {
+        debugPrint(
+            '🔍 [PLAYER] Link is not a URL, resolving serverId: ${_currentStreamLink!.url}');
+        final resolvedUrl =
+            await provider.fetchServerUrl(_currentStreamLink!.url);
+        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+          debugPrint('✅ [PLAYER] Resolved serverId to: $resolvedUrl');
+          _currentStreamLink = StreamLink(
+            provider: _currentStreamLink!.provider,
+            url: resolvedUrl,
+            quality: _currentStreamLink!.quality,
+            headers: provider.getHeadersForUrl(resolvedUrl),
+            type: _currentStreamLink!.type,
+          );
+        } else {
+          throw Exception('Failed to resolve streaming server');
+        }
+      }
+
       // Use SHARED Player from GlobalProvider
       _mediaKitPlayer = _globalPlayerProvider.player;
       _mediaKitVideoController = _globalPlayerProvider.controller;
 
       debugPrint('🎬 [PLAYER] Opening media: ${_currentStreamLink?.url}');
       final headers = _currentStreamLink?.headers ??
-          (_currentHeaders.isNotEmpty
-              ? _currentHeaders
-              : {
-                  'User-Agent': 'Sukinime/2.0',
-                  'Referer': 'https://hianime.to/'
-                });
+          {
+            'User-Agent': 'Sukinime/2.0',
+            'Referer': provider.isHiAnime ? 'https://hianime.to/' : ''
+          };
 
       // Capture current position before switching stream (for quality change)
       final currentPosition = _mediaKitPlayer!.state.position;
@@ -1572,20 +1594,35 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
           // Dropdown settings data
           availableQualities: _allAvailableQualities
               .map((q) => {
-                    'quality': q.quality ?? 'auto',
-                    'label': q.quality ?? 'auto',
+                    'label': q.quality == 'Default'
+                        ? q.provider
+                        : '${q.provider} - ${q.quality}',
+                    'url': q.url,
                   })
               .toList(),
-          selectedQuality: _currentStreamLink?.quality ?? 'auto',
+          selectedQuality: _currentStreamLink == null
+              ? 'auto'
+              : (_currentStreamLink!.quality == 'Default'
+                  ? _currentStreamLink!.provider
+                  : '${_currentStreamLink!.provider} - ${_currentStreamLink!.quality}'),
           availableSubtitles: _availableSubtitles,
           selectedSubtitle: _selectedSubtitleLang,
           selectedAILang: _selectedAILang,
           audioType: _audioType,
-          onQualityChanged: (quality) {
+          onQualityChanged: (label) {
             final selected = _allAvailableQualities.firstWhere(
-              (q) => q.quality == quality,
+              (q) {
+                final qLabel = q.quality == 'Default'
+                    ? q.provider
+                    : '${q.provider} - ${q.quality}';
+                return qLabel == label;
+              },
               orElse: () => _allAvailableQualities.first,
             );
+            if (kDebugMode) {
+              print('🎯 [PLAYER] User selected quality: $label');
+              print('🔗 [PLAYER] URL: ${selected.url}');
+            }
             setState(() => _currentStreamLink = selected);
             _initializePlayer();
           },
@@ -1755,6 +1792,11 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
   }
 
   void _showSettingsModal() {
+    if (kDebugMode) {
+      print('🛠️ [PLAYER] Opening Settings Modal');
+      print('🛠️ [PLAYER] Qualities count: ${_allAvailableQualities.length}');
+      print('🛠️ [PLAYER] Current quality: ${_currentStreamLink?.quality}');
+    }
     showDialog(
       context: context,
       barrierColor: Colors.transparent,

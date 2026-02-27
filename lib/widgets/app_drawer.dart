@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/anime_provider.dart';
+import '../providers/source_provider.dart';
 import '../constants/app_colors.dart';
 import '../screens/browse_screen.dart';
 import '../screens/schedule_screen.dart';
@@ -22,7 +23,8 @@ class AppDrawer extends StatelessWidget {
           // Drawer Header matching Expo LinearGradient
           Container(
             width: double.infinity,
-            padding: EdgeInsets.only(top: topPadding + 20, left: 20, right: 20, bottom: 30),
+            padding: EdgeInsets.only(
+                top: topPadding + 20, left: 20, right: 20, bottom: 30),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
@@ -42,9 +44,11 @@ class AppDrawer extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+                    border:
+                        Border.all(color: Colors.black.withValues(alpha: 0.1)),
                   ),
-                  child: const Icon(Icons.play_arrow_rounded, size: 28, color: Colors.black),
+                  child: const Icon(Icons.play_arrow_rounded,
+                      size: 28, color: Colors.black),
                 ),
                 const SizedBox(width: 15),
                 Column(
@@ -129,12 +133,10 @@ class AppDrawer extends StatelessWidget {
                   label: 'Specials',
                   onTap: () => _navigateToBrowse(context, 'special'),
                 ),
-                
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 15, horizontal: 10),
                   child: Divider(color: Colors.white10),
                 ),
-
                 _buildDrawerItem(
                   context,
                   icon: Icons.calendar_month_outlined,
@@ -142,16 +144,38 @@ class AppDrawer extends StatelessWidget {
                   iconColor: AppColors.primary,
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ScheduleScreen()));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ScheduleScreen()));
                   },
                 ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+                  child: Divider(color: Colors.white10),
+                ),
+                Text(
+                  'ANIME SOURCE',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                _buildSourceSwitcher(context),
               ],
             ),
           ),
 
           // Footer
           Container(
-            padding: EdgeInsets.only(left: 25, right: 25, bottom: MediaQuery.of(context).padding.bottom + 20, top: 20),
+            padding: EdgeInsets.only(
+                left: 25,
+                right: 25,
+                bottom: MediaQuery.of(context).padding.bottom + 20,
+                top: 20),
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: Colors.white10)),
             ),
@@ -192,6 +216,96 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
+  Widget _buildSourceSwitcher(BuildContext context) {
+    return Consumer<SourceProvider>(
+      builder: (context, sourceProvider, _) {
+        return Column(
+          children: [
+            _buildSourceItem(
+              context,
+              source: AnimeSource.hianime,
+              label: 'HiAnime (English Sub)',
+              icon: '🎌',
+              isSelected: sourceProvider.currentSource == AnimeSource.hianime,
+              onTap: () => sourceProvider.setSource(AnimeSource.hianime),
+            ),
+            _buildSourceItem(
+              context,
+              source: AnimeSource.otakudesu,
+              label: 'OtakuDesu (Indo Sub)',
+              icon: '🇮🇩',
+              isSelected: sourceProvider.currentSource == AnimeSource.otakudesu,
+              onTap: () => sourceProvider.setSource(AnimeSource.otakudesu),
+            ),
+            _buildSourceItem(
+              context,
+              source: AnimeSource.kuramanime,
+              label: 'Kuramanime (Indo Sub)',
+              icon: '🇮🇩',
+              isSelected:
+                  sourceProvider.currentSource == AnimeSource.kuramanime,
+              onTap: () => sourceProvider.setSource(AnimeSource.kuramanime),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSourceItem(
+    BuildContext context, {
+    required AnimeSource source,
+    required String label,
+    required String icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: 0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.05),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected
+                        ? AppColors.primary
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+              ),
+              if (isSelected)
+                const Icon(Icons.check_circle,
+                    size: 18, color: AppColors.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDrawerItem(
     BuildContext context, {
     required IconData icon,
@@ -213,7 +327,8 @@ class AppDrawer extends StatelessWidget {
                 color: const Color(0xFF18181B),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 22, color: iconColor ?? const Color(0xFFA1A1AA)),
+              child: Icon(icon,
+                  size: 22, color: iconColor ?? const Color(0xFFA1A1AA)),
             ),
             const SizedBox(width: 15),
             Text(

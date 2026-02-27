@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../services/zoro_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/anime_provider.dart';
 import '../models/anime_model.dart';
 import '../constants/app_colors.dart';
 import '../screens/detail_anime_screen.dart';
@@ -28,7 +29,7 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
   @override
   void initState() {
     super.initState();
-    
+
     _controller = AnimationController(
       duration: const Duration(milliseconds: 200), // FASTER
       vsync: this,
@@ -47,11 +48,11 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
     _controller.forward();
 
     // Check if we need more data
-    final hasCompleteData = widget.anime.synopsis != null && 
-                           widget.anime.synopsis!.isNotEmpty &&
-                           widget.anime.genres != null && 
-                           widget.anime.genres!.isNotEmpty;
-                           
+    final hasCompleteData = widget.anime.synopsis != null &&
+        widget.anime.synopsis!.isNotEmpty &&
+        widget.anime.genres != null &&
+        widget.anime.genres!.isNotEmpty;
+
     if (!hasCompleteData) {
       _fetchFullDetails();
     }
@@ -62,11 +63,11 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
     setState(() => _isLoading = true);
 
     try {
-      final zoro = ZoroService();
-      final data = await zoro.getInfo(widget.anime.id);
-      
-      if (data != null && mounted) {
-        final detail = AnimeDetail.fromJson(data);
+      final provider = Provider.of<AnimeProvider>(context, listen: false);
+      await provider.fetchAnimeDetail(widget.anime.id);
+
+      if (provider.currentAnime != null && mounted) {
+        final detail = provider.currentAnime!;
         setState(() {
           _fullAnime = Anime(
             id: detail.id,
@@ -106,7 +107,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
   Map<String, String> _getImageHeaders() {
     return {
       'Referer': 'https://hianime.to/',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     };
   }
 
@@ -117,10 +119,12 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
     return FadeTransition(
       opacity: _fadeAnimation,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Reduced for performance
+        filter:
+            ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Reduced for performance
         child: Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
           child: ScaleTransition(
             scale: _scaleAnimation,
             child: Container(
@@ -164,7 +168,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                     ),
                     Positioned.fill(
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15), // Reduced for performance
+                        filter: ImageFilter.blur(
+                            sigmaX: 15, sigmaY: 15), // Reduced for performance
                         child: Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -205,7 +210,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.primary.withValues(alpha: 0.4),
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.4),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -259,7 +265,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                         borderRadius: BorderRadius.circular(12),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.4),
+                                            color: Colors.black
+                                                .withValues(alpha: 0.4),
                                             blurRadius: 12,
                                             offset: const Offset(0, 4),
                                           ),
@@ -271,16 +278,21 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                           imageUrl: displayAnime.poster,
                                           fit: BoxFit.cover,
                                           httpHeaders: _getImageHeaders(),
-                                          placeholder: (context, url) => Shimmer.fromColors(
+                                          placeholder: (context, url) =>
+                                              Shimmer.fromColors(
                                             baseColor: const Color(0xFF1E1E2C),
-                                            highlightColor: const Color(0xFF2A2A35),
-                                            child: Container(color: Colors.white10),
+                                            highlightColor:
+                                                const Color(0xFF2A2A35),
+                                            child: Container(
+                                                color: Colors.white10),
                                           ),
-                                          errorWidget: (context, url, error) => Container(
+                                          errorWidget: (context, url, error) =>
+                                              Container(
                                             color: const Color(0xFF1A1A1A),
                                             child: Icon(
                                               Icons.image_not_supported_rounded,
-                                              color: Colors.white.withValues(alpha: 0.3),
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.3),
                                             ),
                                           ),
                                         ),
@@ -291,7 +303,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                     // Title and quick info
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             displayAnime.title,
@@ -306,29 +319,48 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                           const SizedBox(height: 8),
 
                                           // Status and Latest Episode
-                                          if (displayAnime.status != null || displayAnime.latestEpisode != null)
+                                          if (displayAnime.status != null ||
+                                              displayAnime.latestEpisode !=
+                                                  null)
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
                                                 horizontal: 8,
                                                 vertical: 4,
                                               ),
                                               decoration: BoxDecoration(
-                                                color: displayAnime.status?.toLowerCase() == 'ongoing'
-                                                    ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                                    : AppColors.primary.withValues(alpha: 0.15),
-                                                borderRadius: BorderRadius.circular(6),
+                                                color: displayAnime.status
+                                                            ?.toLowerCase() ==
+                                                        'ongoing'
+                                                    ? const Color(0xFF10B981)
+                                                        .withValues(alpha: 0.15)
+                                                    : AppColors.primary
+                                                        .withValues(
+                                                            alpha: 0.15),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
                                                 border: Border.all(
-                                                  color: displayAnime.status?.toLowerCase() == 'ongoing'
-                                                      ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                                                      : AppColors.primary.withValues(alpha: 0.3),
+                                                  color: displayAnime.status
+                                                              ?.toLowerCase() ==
+                                                          'ongoing'
+                                                      ? const Color(0xFF10B981)
+                                                          .withValues(
+                                                              alpha: 0.3)
+                                                      : AppColors.primary
+                                                          .withValues(
+                                                              alpha: 0.3),
                                                 ),
                                               ),
                                               child: Text(
-                                                displayAnime.latestEpisode ?? displayAnime.status ?? '',
+                                                displayAnime.latestEpisode ??
+                                                    displayAnime.status ??
+                                                    '',
                                                 style: GoogleFonts.inter(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.w600,
-                                                  color: displayAnime.status?.toLowerCase() == 'ongoing'
+                                                  color: displayAnime.status
+                                                              ?.toLowerCase() ==
+                                                          'ongoing'
                                                       ? const Color(0xFF6EE7B7)
                                                       : const Color(0xFFBFDBFE),
                                                 ),
@@ -337,7 +369,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                           const SizedBox(height: 12),
 
                                           // Quick stats
-                                          if (displayAnime.totalEpisodes != null)
+                                          if (displayAnime.totalEpisodes !=
+                                              null)
                                             _buildStatChip(
                                               Icons.movie_rounded,
                                               '${displayAnime.totalEpisodes} Episodes',
@@ -368,23 +401,29 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                   const SizedBox(height: 8),
                                   _buildShimmerBlock(height: 30, width: 200),
                                   const SizedBox(height: 16),
-                                ] else if (displayAnime.genres != null && displayAnime.genres!.isNotEmpty) ...[
+                                ] else if (displayAnime.genres != null &&
+                                    displayAnime.genres!.isNotEmpty) ...[
                                   _buildSectionTitle('Genres'),
                                   const SizedBox(height: 8),
                                   Wrap(
                                     spacing: 6,
                                     runSpacing: 6,
-                                    children: displayAnime.genres!.take(5).map((genre) {
+                                    children: displayAnime.genres!
+                                        .take(5)
+                                        .map((genre) {
                                       return Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 10,
                                           vertical: 5,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppColors.primary.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(6),
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                           border: Border.all(
-                                            color: AppColors.primary.withValues(alpha: 0.3),
+                                            color: AppColors.primary
+                                                .withValues(alpha: 0.3),
                                           ),
                                         ),
                                         child: Text(
@@ -405,8 +444,10 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                 if (_isLoading) ...[
                                   _buildSectionTitle('Synopsis'),
                                   const SizedBox(height: 8),
-                                  _buildShimmerBlock(height: 80, width: double.infinity),
-                                ] else if (displayAnime.synopsis != null && displayAnime.synopsis!.isNotEmpty) ...[
+                                  _buildShimmerBlock(
+                                      height: 80, width: double.infinity),
+                                ] else if (displayAnime.synopsis != null &&
+                                    displayAnime.synopsis!.isNotEmpty) ...[
                                   _buildSectionTitle('Synopsis'),
                                   const SizedBox(height: 8),
                                   Text(
@@ -431,7 +472,8 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: _navigateToDetail,
-                                  icon: const Icon(Icons.info_outline_rounded, size: 18),
+                                  icon: const Icon(Icons.info_outline_rounded,
+                                      size: 18),
                                   label: Text(
                                     'View Details',
                                     style: GoogleFonts.inter(
@@ -442,12 +484,14 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primary,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     elevation: 0,
-                                    shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                                    shadowColor: AppColors.primary
+                                        .withValues(alpha: 0.4),
                                   ),
                                 ),
                               ),
@@ -519,4 +563,3 @@ class _AnimePreviewDialogState extends State<AnimePreviewDialog>
     );
   }
 }
-

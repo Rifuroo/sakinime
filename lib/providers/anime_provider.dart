@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/anime_model.dart';
 import '../services/anime_service.dart';
+import '../services/indo_anime_service.dart';
 import '../services/bookmark_service.dart';
+import '../providers/source_provider.dart';
 
 enum HomeSidebarCategory { movies, ona, ova, specials, tv }
 
@@ -68,10 +70,50 @@ extension HomeCollectionTypeX on HomeCollectionType {
 
 class AnimeProvider extends ChangeNotifier {
   final AnimeService _service = AnimeService();
+  SourceProvider? _sourceProvider;
+
+  // Indo source specific service
+  IndoAnimeService? _indoService;
+
+  AnimeSource? _lastSource;
+
+  // New Update method for ProxyProvider
+  void update(SourceProvider sourceProvider) {
+    if (_lastSource != sourceProvider.currentSource) {
+      if (kDebugMode)
+        print(
+            '🔄 PROVIDER: Source switching from $_lastSource to ${sourceProvider.currentSource}');
+      _lastSource = sourceProvider.currentSource;
+      _sourceProvider = sourceProvider;
+      if (sourceProvider.currentSource != AnimeSource.hianime) {
+        _indoService = IndoAnimeService(
+          baseUrl: sourceProvider.baseUrl,
+          source: sourceProvider.currentSource,
+        );
+      } else {
+        _indoService = null;
+      }
+      // Clear home data when source changes
+      homeOngoing = [];
+      homeComplete = [];
+      homeMovie = [];
+      homeRecentEpisodes = [];
+      homeRecentAdded = [];
+      homeTopAiring = [];
+      homeMostPopular = [];
+      homeMostFavorite = [];
+      homeSectionsError = null;
+      errorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  bool get isHiAnime => _sourceProvider?.currentSource == AnimeSource.hianime;
 
   // Lists
   List<Anime> homeOngoing = [];
   List<Anime> homeComplete = [];
+  List<Anime> homeMovie = []; // For Kuramanime
   List<Anime> recentAnimes = [];
   List<Anime> ongoingAnimes = [];
   List<Anime> completedAnimes = [];
@@ -89,7 +131,7 @@ class AnimeProvider extends ChangeNotifier {
   final Map<HomeSidebarCategory, List<Anime>> sidebarCollections = {
     for (final category in HomeSidebarCategory.values) category: <Anime>[],
   };
-  
+
   // Status
   bool isLoading = false;
   bool isLoadingMore = false;
@@ -109,7 +151,7 @@ class AnimeProvider extends ChangeNotifier {
   // Pagination
   int currentPage = 1;
   bool hasMorePages = true;
-  int totalPages = 1;  // ✅ NEW: Track total pages
+  int totalPages = 1; // ✅ NEW: Track total pages
 
   // Current data
   AnimeDetail? currentAnime;
@@ -131,13 +173,33 @@ class AnimeProvider extends ChangeNotifier {
   Future<void> fetchHome() async {
     isLoading = true;
     errorMessage = null;
-    notifyListeners();
+    if (kDebugMode)
+      print(
+          '📡 fetchHome starting. isHiAnime=$isHiAnime, source=${_sourceProvider?.currentSource}');
+    scheduleMicrotask(() => notifyListeners());
 
     try {
-      final homeData = await _service.getHome();
-      homeOngoing = homeData['ongoing'] ?? [];
-      homeComplete = homeData['complete'] ?? [];
-      
+      if (isHiAnime) {
+        if (kDebugMode) print('📡 Fetching HiAnime Home...');
+        final homeData = await _service.getHome();
+        homeOngoing = homeData['ongoing'] ?? [];
+        homeComplete = homeData['complete'] ?? [];
+      } else if (_indoService != null) {
+        if (kDebugMode)
+          print('📡 Fetching Indo Home (${_sourceProvider?.currentSource})...');
+        final homeData = await _indoService!.getHome();
+        if (homeData != null) {
+          homeOngoing = homeData.ongoing;
+          homeComplete = homeData.completed;
+          homeMovie = homeData.movies ?? [];
+          if (kDebugMode)
+            print(
+                '✅ Loaded Indo Home: Ongoing=${homeOngoing.length}, Complete=${homeComplete.length}, Movies=${homeMovie.length}');
+        } else {
+          if (kDebugMode) print('⚠️ Indo Home Data is NULL');
+        }
+      }
+
       if (homeOngoing.isEmpty && homeComplete.isEmpty) {
         errorMessage = 'Tidak ada data home';
       }
@@ -173,52 +235,81 @@ class AnimeProvider extends ChangeNotifier {
 
   // LATEST ANIMES - Optimized Progressive Loading (Balanced Speed)
   Future<void> fetchHomeSections({bool forceRefresh = false}) async {
+    if (kDebugMode)
+      print(
+          '📡 fetchHomeSections starting. isHiAnime=$isHiAnime, source=${_sourceProvider?.currentSource}');
+    // 🆕 REDIRECT FOR INDO SOURCES
+    if (!isHiAnime) {
+      if (kDebugMode)
+        print(
+            '📡 fetchHomeSections: Redirecting to fetchHome() for Indo source');
+      return fetchHome();
+    }
+
     // Prevent concurrent calls
     if (isHomeSectionsLoading) return;
-    
+
     // If not forcing refresh and we have data, skip to avoid "massive" requests
-    if (!forceRefresh && homeMostFavorite.isNotEmpty && homeRecentEpisodes.isNotEmpty) {
+    if (!forceRefresh &&
+        homeMostFavorite.isNotEmpty &&
+        homeRecentEpisodes.isNotEmpty) {
       if (kDebugMode) print('Home data exists, skipping fetch (Lazy Mode)');
       return;
     }
-    
+
     isHomeSectionsLoading = true;
     homeSectionsError = null;
-    notifyListeners();
+    scheduleMicrotask(() => notifyListeners());
 
     try {
       // 🚀 BATCH 1: Critical "Above the Fold" Content (Parallel)
       await Future.wait([
         if (forceRefresh || homeMostFavorite.isEmpty)
           (() async {
-            try { homeMostFavorite = await _service.getMostFavorite(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 1 Error: $e'); }
+            try {
+              homeMostFavorite = await _service.getMostFavorite(page: 1);
+            } catch (e) {
+              if (kDebugMode) print('⚠️ Batch 1 Error: $e');
+            }
           })(),
         if (forceRefresh || homeRecentEpisodes.isEmpty)
           (() async {
-            try { homeRecentEpisodes = await _service.getRecentAnime(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 1 Error: $e'); }
+            try {
+              homeRecentEpisodes = await _service.getRecentAnime(page: 1);
+            } catch (e) {
+              if (kDebugMode) print('⚠️ Batch 1 Error: $e');
+            }
           })(),
       ]);
       notifyListeners();
 
       // ⏳ SHORT DELAY (Safe but Fast)
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       // 🚀 BATCH 2: Trending & New Additions (Parallel)
       await Future.wait([
         if (forceRefresh || homeTopAiring.isEmpty)
           (() async {
-            try { homeTopAiring = await _service.getTopAiring(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 2 Error: $e'); }
+            try {
+              homeTopAiring = await _service.getTopAiring(page: 1);
+            } catch (e) {
+              if (kDebugMode) print('⚠️ Batch 2 Error: $e');
+            }
           })(),
         if (forceRefresh || homeRecentAdded.isEmpty)
           (() async {
-            try { homeRecentAdded = await _service.getRecentAdded(page: 1); } catch (e) { if (kDebugMode) print('⚠️ Batch 2 Error: $e'); }
+            try {
+              homeRecentAdded = await _service.getRecentAdded(page: 1);
+            } catch (e) {
+              if (kDebugMode) print('⚠️ Batch 2 Error: $e');
+            }
           })(),
       ]);
       notifyListeners();
-      
+
       // ⏳ SHORT DELAY
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       // 🚀 BATCH 3: Most Popular
       try {
         if (forceRefresh || homeMostPopular.isEmpty) {
@@ -341,27 +432,28 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
-  
+
     try {
       final result = await _service.getRecentAnimeWithPagination(page: page);
       final animes = result['animes'] as List<Anime>;
       final pagination = result['pagination'] as Map<String, dynamic>;
-      
+
       currentPage = pagination['currentPage'] ?? page;
       hasMorePages = pagination['hasNextPage'] ?? false;
       totalPages = pagination['totalPages'] ?? 1;
-      
+
       if (page == 1) {
         recentAnimes = animes;
       } else {
         final existingIds = recentAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
+        final newAnimes =
+            animes.where((a) => !existingIds.contains(a.id)).toList();
         recentAnimes.addAll(newAnimes);
       }
-      
+
       if (recentAnimes.isEmpty) {
         errorMessage = 'Tidak ada anime recent';
       }
@@ -369,24 +461,23 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchRecentAnimes: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
   }
-  
 
   // SEARCH
   void searchAnimesDebounced(String query) {
     _searchDebounce?.cancel();
-    
+
     if (query.trim().isEmpty) {
       searchResults = [];
       _lastSearchQuery = '';
       notifyListeners();
       return;
     }
-    
+
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
       searchAnimes(query);
     });
@@ -402,28 +493,45 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     _lastSearchQuery = query;
     notifyListeners();
-  
+
     try {
-      final result = await _service.searchAnimeWithPagination(query, page: page);
-      final animes = result['animes'] as List<Anime>;
-      final pagination = result['pagination'] as Map<String, dynamic>;
-      
-      currentPage = pagination['currentPage'] ?? page;
-      hasMorePages = pagination['hasNextPage'] ?? false;
-      totalPages = pagination['totalPages'] ?? 1;
-      
+      final List<Anime> animes;
+      final int respCurrentPage;
+      final bool respHasMorePages;
+      final int respTotalPages;
+
+      if (isHiAnime) {
+        final result =
+            await _service.searchAnimeWithPagination(query, page: page);
+        animes = result['animes'] as List<Anime>;
+        final pagination = result['pagination'] as Map<String, dynamic>;
+        respCurrentPage = pagination['currentPage'] ?? page;
+        respHasMorePages = pagination['hasNextPage'] ?? false;
+        respTotalPages = pagination['totalPages'] ?? 1;
+      } else {
+        animes = await _indoService?.search(query) ?? [];
+        respCurrentPage = page;
+        respHasMorePages = false; // Simple search for now
+        respTotalPages = 1;
+      }
+
+      currentPage = respCurrentPage;
+      hasMorePages = respHasMorePages;
+      totalPages = respTotalPages;
+
       if (page == 1) {
         searchResults = animes;
       } else {
         final existingIds = searchResults.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
+        final newAnimes =
+            animes.where((a) => !existingIds.contains(a.id)).toList();
         searchResults.addAll(newAnimes);
       }
-      
+
       if (searchResults.isEmpty) {
         errorMessage = 'Anime "$query" tidak ditemukan';
       }
@@ -431,14 +539,15 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in searchAnimes: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
   }
 
   // ONGOING
-  Future<void> fetchOngoingAnimes({int page = 1, String order = 'popular'}) async {
+  Future<void> fetchOngoingAnimes(
+      {int page = 1, String order = 'popular'}) async {
     if (page == 1) {
       isLoading = true;
       ongoingAnimes = [];
@@ -448,27 +557,39 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
-  
+
     try {
-      final result = await _service.getOngoingAnimeWithPagination(page: page, order: order);
-      final animes = result['animes'] as List<Anime>;
-      final pagination = result['pagination'] as Map<String, dynamic>;
-      
-      currentPage = pagination['currentPage'] ?? page;
-      hasMorePages = pagination['hasNextPage'] ?? false;
-      totalPages = pagination['totalPages'] ?? 1;
-      
-      if (page == 1) {
-        ongoingAnimes = animes;
+      if (isHiAnime) {
+        final result = await _service.getOngoingAnimeWithPagination(
+            page: page, order: order);
+        final animes = result['animes'] as List<Anime>;
+        final pagination = result['pagination'] as Map<String, dynamic>;
+
+        currentPage = pagination['currentPage'] ?? page;
+        hasMorePages = pagination['hasNextPage'] ?? false;
+        totalPages = pagination['totalPages'] ?? 1;
+
+        if (page == 1) {
+          ongoingAnimes = animes;
+        } else {
+          final existingIds = ongoingAnimes.map((a) => a.id).toSet();
+          final newAnimes =
+              animes.where((a) => !existingIds.contains(a.id)).toList();
+          ongoingAnimes.addAll(newAnimes);
+        }
       } else {
-        final existingIds = ongoingAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
-        ongoingAnimes.addAll(newAnimes);
+        // For Indo sources, use home data if page 1, otherwise limited support
+        if (page == 1) {
+          ongoingAnimes = homeOngoing;
+        }
+        currentPage = 1;
+        hasMorePages = false;
+        totalPages = 1;
       }
-      
+
       if (ongoingAnimes.isEmpty) {
         errorMessage = 'Tidak ada anime ongoing';
       }
@@ -476,14 +597,15 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchOngoingAnimes: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
   }
 
   // COMPLETED
-  Future<void> fetchCompletedAnimes({int page = 1, String order = 'latest'}) async {
+  Future<void> fetchCompletedAnimes(
+      {int page = 1, String order = 'latest'}) async {
     if (page == 1) {
       isLoading = true;
       completedAnimes = [];
@@ -493,27 +615,38 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
-  
+
     try {
-      final result = await _service.getCompletedAnimeWithPagination(page: page, order: order);
-      final animes = result['animes'] as List<Anime>;
-      final pagination = result['pagination'] as Map<String, dynamic>;
-      
-      currentPage = pagination['currentPage'] ?? page;
-      hasMorePages = pagination['hasNextPage'] ?? false;
-      totalPages = pagination['totalPages'] ?? 1;
-      
-      if (page == 1) {
-        completedAnimes = animes;
+      if (isHiAnime) {
+        final result = await _service.getCompletedAnimeWithPagination(
+            page: page, order: order);
+        final animes = result['animes'] as List<Anime>;
+        final pagination = result['pagination'] as Map<String, dynamic>;
+
+        currentPage = pagination['currentPage'] ?? page;
+        hasMorePages = pagination['hasNextPage'] ?? false;
+        totalPages = pagination['totalPages'] ?? 1;
+
+        if (page == 1) {
+          completedAnimes = animes;
+        } else {
+          final existingIds = completedAnimes.map((a) => a.id).toSet();
+          final newAnimes =
+              animes.where((a) => !existingIds.contains(a.id)).toList();
+          completedAnimes.addAll(newAnimes);
+        }
       } else {
-        final existingIds = completedAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
-        completedAnimes.addAll(newAnimes);
+        if (page == 1) {
+          completedAnimes = homeComplete;
+        }
+        currentPage = 1;
+        hasMorePages = false;
+        totalPages = 1;
       }
-      
+
       if (completedAnimes.isEmpty) {
         errorMessage = 'Tidak ada anime completed';
       }
@@ -521,7 +654,7 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchCompletedAnimes: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
@@ -538,27 +671,28 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
-  
+
     try {
       final result = await _service.getPopularAnimeWithPagination(page: page);
       final animes = result['animes'] as List<Anime>;
       final pagination = result['pagination'] as Map<String, dynamic>;
-      
+
       currentPage = pagination['currentPage'] ?? page;
       hasMorePages = pagination['hasNextPage'] ?? false;
       totalPages = pagination['totalPages'] ?? 1;
-      
+
       if (page == 1) {
         popularAnimes = animes;
       } else {
         final existingIds = popularAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
+        final newAnimes =
+            animes.where((a) => !existingIds.contains(a.id)).toList();
         popularAnimes.addAll(newAnimes);
       }
-      
+
       if (popularAnimes.isEmpty) {
         errorMessage = 'Tidak ada anime popular';
       }
@@ -566,7 +700,7 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchPopularAnimes: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
@@ -583,27 +717,29 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
-  
+
     try {
-      final result = await _service.getMoviesWithPagination(page: page, order: order);
+      final result =
+          await _service.getMoviesWithPagination(page: page, order: order);
       final animes = result['animes'] as List<Anime>;
       final pagination = result['pagination'] as Map<String, dynamic>;
-      
+
       currentPage = pagination['currentPage'] ?? page;
       hasMorePages = pagination['hasNextPage'] ?? false;
       totalPages = pagination['totalPages'] ?? 1;
-      
+
       if (page == 1) {
         movieAnimes = animes;
       } else {
         final existingIds = movieAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
+        final newAnimes =
+            animes.where((a) => !existingIds.contains(a.id)).toList();
         movieAnimes.addAll(newAnimes);
       }
-      
+
       if (movieAnimes.isEmpty) {
         errorMessage = 'Tidak ada movie';
       }
@@ -611,7 +747,7 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchMovies: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
@@ -628,44 +764,45 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
-  
+
     try {
       Map<String, dynamic> result;
-      
+
       if (query != null && query.trim().isNotEmpty) {
         result = await _service.searchAnimeWithPagination(query, page: page);
       } else {
         result = await _service.getRecentAnimeWithPagination(page: page);
       }
-      
+
       final animes = result['animes'] as List<Anime>;
       final pagination = result['pagination'] as Map<String, dynamic>;
-      
+
       currentPage = pagination['currentPage'] ?? page;
       hasMorePages = pagination['hasNextPage'] ?? false;
       totalPages = pagination['totalPages'] ?? 1;
-      
+
       if (page == 1) {
         allAnimes = animes;
       } else {
         final existingIds = allAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
+        final newAnimes =
+            animes.where((a) => !existingIds.contains(a.id)).toList();
         allAnimes.addAll(newAnimes);
       }
-      
+
       if (allAnimes.isEmpty) {
-        errorMessage = query != null 
-            ? 'Anime "$query" tidak ditemukan' 
+        errorMessage = query != null
+            ? 'Anime "$query" tidak ditemukan'
             : 'Tidak ada data anime';
       }
     } catch (e) {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchAllAnimes: $e');
     }
-  
+
     isLoading = false;
     isLoadingMore = false;
     notifyListeners();
@@ -679,30 +816,33 @@ class AnimeProvider extends ChangeNotifier {
 
     try {
       final data = await _service.getSchedule();
-      
+
       // Clear existing schedules
       schedules = {};
-      
+
       // Safely parse the schedule data
       data.forEach((key, value) {
-          try {
-            if (value is List) {
-              final list = value.map((i) {
-                if (i is Map) {
-                  return ScheduleItem.fromJson(Map<String, dynamic>.from(i));
-                }
-                return null;
-              }).whereType<ScheduleItem>().toList();
-              
-              if (list.isNotEmpty) {
-                schedules[key.toString()] = list;
-              }
+        try {
+          if (value is List) {
+            final list = value
+                .map((i) {
+                  if (i is Map) {
+                    return ScheduleItem.fromJson(Map<String, dynamic>.from(i));
+                  }
+                  return null;
+                })
+                .whereType<ScheduleItem>()
+                .toList();
+
+            if (list.isNotEmpty) {
+              schedules[key.toString()] = list;
             }
-          } catch (e) {
-            if (kDebugMode) print('⚠️ Error parsing schedule for $key: $e');
           }
-        });
-      
+        } catch (e) {
+          if (kDebugMode) print('⚠️ Error parsing schedule for $key: $e');
+        }
+      });
+
       if (schedules.isEmpty) {
         errorMessage = 'Jadwal tidak ditemukan';
       }
@@ -723,7 +863,7 @@ class AnimeProvider extends ChangeNotifier {
       if (homeMostPopular.isEmpty) {
         await fetchHome();
       }
-      
+
       final list = homeMostPopular.isNotEmpty ? homeMostPopular : popularAnimes;
       if (list.isNotEmpty) {
         final random = DateTime.now().millisecond % list.length;
@@ -743,8 +883,9 @@ class AnimeProvider extends ChangeNotifier {
 
     try {
       final data = await _service.getWatch2GetherRooms(room: room);
-      watch2GetherRooms = data.map((i) => Watch2GetherRoom.fromJson(i)).toList();
-      
+      watch2GetherRooms =
+          data.map((i) => Watch2GetherRoom.fromJson(i)).toList();
+
       if (watch2GetherRooms.isEmpty) {
         errorMessage = 'Tidak ada room aktif';
       }
@@ -781,7 +922,7 @@ class AnimeProvider extends ChangeNotifier {
 
     try {
       genres = await _service.getGenres();
-      
+
       if (genres.isEmpty) {
         errorMessage = 'Genre tidak ditemukan';
       }
@@ -805,37 +946,39 @@ class AnimeProvider extends ChangeNotifier {
     } else {
       isLoadingMore = true;
     }
-    
+
     errorMessage = null;
     notifyListeners();
 
     try {
       // ✅ Use new method that returns pagination info
-      final result = await _service.getAnimeByGenreWithPagination(genreId, page: page);
-      
+      final result =
+          await _service.getAnimeByGenreWithPagination(genreId, page: page);
+
       final animes = result['animes'] as List<Anime>;
       final pagination = result['pagination'] as Map<String, dynamic>;
-      
+
       // ✅ Update pagination state
       currentPage = pagination['currentPage'] ?? page;
       hasMorePages = pagination['hasNextPage'] ?? false;
       totalPages = pagination['totalPages'] ?? 1;
-      
+
       if (kDebugMode) {
         print('📄 Provider pagination state:');
         print('   Current: $currentPage/$totalPages');
         print('   Has more: $hasMorePages');
         print('   Anime count: ${animes.length}');
       }
-      
+
       if (page == 1) {
         genreAnimes = animes;
       } else {
         final existingIds = genreAnimes.map((a) => a.id).toSet();
-        final newAnimes = animes.where((a) => !existingIds.contains(a.id)).toList();
+        final newAnimes =
+            animes.where((a) => !existingIds.contains(a.id)).toList();
         genreAnimes.addAll(newAnimes);
       }
-      
+
       if (genreAnimes.isEmpty) {
         errorMessage = 'Anime genre tidak ditemukan';
       }
@@ -851,40 +994,41 @@ class AnimeProvider extends ChangeNotifier {
 
   // BATCH
   Future<void> fetchBatchList({int page = 1}) async {
-  if (page == 1) {
-    isLoading = true;
-    batchList = [];
-  } else {
-    isLoadingMore = true;
-  }
-  
-  errorMessage = null;
-  notifyListeners();
-
-  try {
-    final batches = await _service.getBatchList(page: page);
-    
     if (page == 1) {
-      batchList = batches;
+      isLoading = true;
+      batchList = [];
     } else {
-      batchList.addAll(batches);
+      isLoadingMore = true;
     }
-    
-    currentPage = page;
-    hasMorePages = batches.length >= 16; // Changed from 20 to 16
-    
-    if (batchList.isEmpty) {
-      errorMessage = 'Tidak ada batch';
+
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      final batches = await _service.getBatchList(page: page);
+
+      if (page == 1) {
+        batchList = batches;
+      } else {
+        batchList.addAll(batches);
+      }
+
+      currentPage = page;
+      hasMorePages = batches.length >= 16; // Changed from 20 to 16
+
+      if (batchList.isEmpty) {
+        errorMessage = 'Tidak ada batch';
+      }
+    } catch (e) {
+      errorMessage = 'Error: $e';
+      if (kDebugMode) print('❌ Error in fetchBatchList: $e');
     }
-  } catch (e) {
-    errorMessage = 'Error: $e';
-    if (kDebugMode) print('❌ Error in fetchBatchList: $e');
+
+    isLoading = false;
+    isLoadingMore = false;
+    notifyListeners();
   }
 
-  isLoading = false;
-  isLoadingMore = false;
-  notifyListeners();
-}
   // ANIME DETAIL
   Future<void> fetchAnimeDetail(String animeId) async {
     isLoading = true;
@@ -894,9 +1038,13 @@ class AnimeProvider extends ChangeNotifier {
 
     try {
       if (kDebugMode) print('🔍 PROVIDER: Fetching anime detail for $animeId');
-      
-      currentAnime = await _service.getAnimeDetail(animeId);
-      
+
+      if (isHiAnime) {
+        currentAnime = await _service.getAnimeDetail(animeId);
+      } else {
+        currentAnime = await _indoService?.getDetail(animeId);
+      }
+
       if (currentAnime == null) {
         errorMessage = 'Anime tidak ditemukan';
         if (kDebugMode) print('❌ PROVIDER: currentAnime is null');
@@ -906,8 +1054,10 @@ class AnimeProvider extends ChangeNotifier {
           print('   Title: ${currentAnime!.title}');
           print('   Episodes count: ${currentAnime!.episodes.length}');
         }
-        // Automaticaly fetch characters for the detail screen
-        fetchCharacters(animeId);
+        // Automaticaly fetch characters for the detail screen (HiAnime only)
+        if (isHiAnime) {
+          fetchCharacters(animeId);
+        }
       }
     } catch (e) {
       errorMessage = 'Error: $e';
@@ -919,35 +1069,32 @@ class AnimeProvider extends ChangeNotifier {
   }
 
   // STREAMING LINKS
-   Future<void> fetchStreamingLinks(String episodeId) async {
+  Future<void> fetchStreamingLinks(String episodeId) async {
     currentStreamLinks = [];
     currentEpisodeData = null; // ✅ Reset episode data
     errorMessage = null;
-    
+
     try {
       if (kDebugMode) print('🔥 PROVIDER: Requesting streaming for $episodeId');
-      
-      // ✅ Get full episode data from service
-      final episodeData = await _service.getEpisodeDetail(episodeId);
-      
-      if (episodeData != null) {
-        currentEpisodeData = episodeData;
-        
-        // ✅ Extract streaming links from episode data
-        if (episodeData['resolved_links'] != null) {
-          final links = episodeData['resolved_links'] as List;
-          currentStreamLinks = links.map((l) => StreamLink.fromJson(l)).toList();
-        }
-        
-        if (kDebugMode) {
-          print('✅ PROVIDER: Got ${currentStreamLinks.length} links');
-          if (episodeData['recommendedEpisodeList'] != null) {
-            final recList = episodeData['recommendedEpisodeList'] as List;
-            print('✅ PROVIDER: Got ${recList.length} recommended episodes');
+
+      if (isHiAnime) {
+        // ✅ Get full episode data from service
+        final episodeData = await _service.getEpisodeDetail(episodeId);
+
+        if (episodeData != null) {
+          currentEpisodeData = episodeData;
+
+          // ✅ Extract streaming links from episode data
+          if (episodeData['resolved_links'] != null) {
+            final links = episodeData['resolved_links'] as List;
+            currentStreamLinks =
+                links.map((l) => StreamLink.fromJson(l)).toList();
           }
         }
+      } else if (_indoService != null) {
+        currentStreamLinks = await _indoService!.getStreamLinks(episodeId);
       }
-      
+
       if (currentStreamLinks.isEmpty) {
         errorMessage = 'Streaming link tidak ditemukan';
         if (kDebugMode) print('⚠️ No streaming links found: $episodeId');
@@ -956,7 +1103,7 @@ class AnimeProvider extends ChangeNotifier {
       errorMessage = 'Error: $e';
       if (kDebugMode) print('❌ Error in fetchStreamingLinks: $e');
     }
-    
+
     notifyListeners();
   }
 
@@ -975,6 +1122,9 @@ class AnimeProvider extends ChangeNotifier {
   // SERVER URL
   Future<String?> fetchServerUrl(String serverId) async {
     try {
+      if (!isHiAnime && _indoService != null) {
+        return await _indoService!.getServerUrl(serverId);
+      }
       final url = await _service.getServerUrl(serverId);
       return url;
     } catch (e) {
@@ -982,6 +1132,16 @@ class AnimeProvider extends ChangeNotifier {
       if (kDebugMode) print('❌ Error in fetchServerUrl: $e');
       return null;
     }
+  }
+
+  Map<String, String>? getHeadersForUrl(String url) {
+    if (!isHiAnime && _indoService != null) {
+      return _indoService!.getHeadersForUrl(url);
+    }
+    return {
+      'User-Agent': 'Sukinime/2.0',
+      'Referer': isHiAnime ? 'https://hianime.to/' : ''
+    };
   }
 
   // HELPERS
@@ -1006,11 +1166,13 @@ class AnimeProvider extends ChangeNotifier {
       isLoadingMore = true;
     }
     notifyListeners();
-    
+
     try {
       final result = await _service.getCharacters(animeId, page: page);
-      if (kDebugMode) print('👥 Provider.fetchCharacters result: ${result.length} items for $animeId');
-      
+      if (kDebugMode)
+        print(
+            '👥 Provider.fetchCharacters result: ${result.length} items for $animeId');
+
       final mappedChars = result.map((c) => Character.fromJson(c)).toList();
 
       if (page == 1) {
@@ -1038,10 +1200,11 @@ class AnimeProvider extends ChangeNotifier {
       isLoadingMore = true; // Use shared isLoadingMore flag
     }
     notifyListeners();
-    
+
     try {
       final result = await _service.getNews(page: page);
-      if (kDebugMode) print('📰 Provider.fetchNews result: ${result.length} items');
+      if (kDebugMode)
+        print('📰 Provider.fetchNews result: ${result.length} items');
       if (page == 1) {
         news = result;
       } else {

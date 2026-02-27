@@ -1,6 +1,7 @@
 // widgets/video_player_controls.dart - Video player controls matching React Native PlayerScreen
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 import '../models/anime_model.dart';
@@ -117,12 +118,20 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
   bool _showSettings = false;
 
   void _openSettings() {
+    if (kDebugMode) {
+      print(
+          '🛠️ [CONTROLS] Opening Settings. isPortrait: ${MediaQuery.of(context).orientation == Orientation.portrait}');
+      print('🛠️ [CONTROLS] Qualities: ${widget.availableQualities.length}');
+      print('🛠️ [CONTROLS] Current Quality: ${widget.selectedQuality}');
+    }
+
     if (widget.showControls) {
       widget.onToggleControls();
     }
-    
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
-    
+
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
+
     if (isPortrait) {
       showGeneralDialog(
         context: context,
@@ -138,7 +147,8 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
             position: Tween<Offset>(
               begin: const Offset(0, 1),
               end: Offset.zero,
-            ).animate(CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic)),
+            ).animate(
+                CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic)),
             child: child,
           );
         },
@@ -152,7 +162,7 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-    
+
     if (hours > 0) {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
@@ -161,7 +171,8 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
 
   @override
   Widget build(BuildContext context) {
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
     return Stack(
       children: [
         // Dark Overlay Backdrop (YouTube style) - ONLY when not locked
@@ -177,7 +188,8 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
         ),
 
         // Settings Overlay
-        if (_showSettings && MediaQuery.of(context).orientation != Orientation.portrait)
+        if (_showSettings &&
+            MediaQuery.of(context).orientation != Orientation.portrait)
           _buildSettingsOverlay(context),
 
         IgnorePointer(
@@ -193,7 +205,7 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                     onTap: widget.onToggleControls,
                     child: Container(color: Colors.transparent),
                   ),
-                
+
                 // Top Bar
                 if (!widget.isLocked)
                   Positioned(
@@ -210,7 +222,8 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                         ),
                       ),
                       padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + (isPortrait ? 4 : 8),
+                        top: MediaQuery.of(context).padding.top +
+                            (isPortrait ? 4 : 8),
                         bottom: isPortrait ? 10 : 20,
                         left: isPortrait ? 8 : 16,
                         right: isPortrait ? 8 : 16,
@@ -220,7 +233,9 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                         children: [
                           IconButton(
                             onPressed: widget.onBack,
-                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: isPortrait ? 24 : 28),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded,
+                                color: Colors.white,
+                                size: isPortrait ? 24 : 28),
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           ),
@@ -253,14 +268,18 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                           ),
                           IconButton(
                             onPressed: widget.onTogglePip,
-                            icon: Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white, size: isPortrait ? 18 : 22),
+                            icon: Icon(Icons.picture_in_picture_alt_rounded,
+                                color: Colors.white,
+                                size: isPortrait ? 18 : 22),
                             constraints: const BoxConstraints(),
                             padding: const EdgeInsets.all(8),
                           ),
                           const SizedBox(width: 4),
                           IconButton(
                             onPressed: _openSettings,
-                            icon: Icon(Icons.settings_outlined, color: Colors.white, size: isPortrait ? 18 : 22),
+                            icon: Icon(Icons.settings_outlined,
+                                color: Colors.white,
+                                size: isPortrait ? 18 : 22),
                             constraints: const BoxConstraints(),
                             padding: const EdgeInsets.all(8),
                           ),
@@ -278,15 +297,15 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                         // Seek Backward
                         IconButton(
                           onPressed: widget.onSeekBackward,
-                          icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 24), // Smaller
+                          icon: const Icon(Icons.replay_10_rounded,
+                              color: Colors.white, size: 24), // Smaller
                           padding: const EdgeInsets.all(8),
                           style: IconButton.styleFrom(
-                            backgroundColor: Colors.transparent, 
-                            highlightColor: Colors.white10
-                          ),
+                              backgroundColor: Colors.transparent,
+                              highlightColor: Colors.white10),
                         ),
                         const SizedBox(width: 32), // Reduced spacing
-                        
+
                         // Play/Pause (Big Center Button)
                         GestureDetector(
                           onTap: widget.onTogglePlay,
@@ -298,23 +317,25 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                              widget.isPlaying
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
                               color: Colors.white,
                               size: 32, // Reduced from 40
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(width: 32),
                         // Seek Forward
                         IconButton(
                           onPressed: widget.onSeekForward,
-                          icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 24), // Smaller
+                          icon: const Icon(Icons.forward_10_rounded,
+                              color: Colors.white, size: 24), // Smaller
                           padding: const EdgeInsets.all(8),
                           style: IconButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                             highlightColor: Colors.white10
-                          ),
+                              backgroundColor: Colors.transparent,
+                              highlightColor: Colors.white10),
                         ),
                       ],
                     ),
@@ -322,24 +343,24 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
 
                 // Lock Button (Fullscreen only)
                 if (widget.isFullScreen)
-                   Align(
-                     alignment: Alignment.centerLeft,
-                     child: Padding(
-                       padding: const EdgeInsets.only(left: 24),
-                       child: IconButton(
-                         onPressed: widget.onToggleLock,
-                         icon: Icon(
-                            widget.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, 
-                            color: Colors.white, 
-                            size: 28
-                         ),
-                         style: IconButton.styleFrom(
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 24),
+                      child: IconButton(
+                        onPressed: widget.onToggleLock,
+                        icon: Icon(
+                            widget.isLocked
+                                ? Icons.lock_rounded
+                                : Icons.lock_open_rounded,
+                            color: Colors.white,
+                            size: 28),
+                        style: IconButton.styleFrom(
                             backgroundColor: Colors.black45,
-                            padding: const EdgeInsets.all(12)
-                         ),
-                       ),
-                     ),
-                   ),
+                            padding: const EdgeInsets.all(12)),
+                      ),
+                    ),
+                  ),
 
                 // Bottom Bar
                 if (!widget.isLocked)
@@ -359,7 +380,8 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                       padding: EdgeInsets.only(
                         left: 12,
                         right: 12,
-                        bottom: MediaQuery.of(context).padding.bottom + (isPortrait ? 4 : 8),
+                        bottom: MediaQuery.of(context).padding.bottom +
+                            (isPortrait ? 4 : 8),
                         top: 10,
                       ),
                       child: Column(
@@ -369,7 +391,8 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                           Align(
                             alignment: Alignment.centerLeft,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               child: Text(
                                 '${_formatTime(widget.currentPosition)} / ${_formatTime(widget.totalDuration)}',
                                 style: GoogleFonts.robotoMono(
@@ -389,22 +412,40 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                                   child: SliderTheme(
                                     data: SliderThemeData(
                                       trackHeight: 1.5,
-                                      thumbShape: RoundSliderThumbShape(enabledThumbRadius: isPortrait ? 4 : 5),
-                                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                                      thumbShape: RoundSliderThumbShape(
+                                          enabledThumbRadius:
+                                              isPortrait ? 4 : 5),
+                                      overlayShape:
+                                          const RoundSliderOverlayShape(
+                                              overlayRadius: 10),
                                       activeTrackColor: const Color(0xFFFF0000),
                                       inactiveTrackColor: Colors.white24,
                                       thumbColor: const Color(0xFFFF0000),
-                                      overlayColor: const Color(0xFFFF0000).withValues(alpha: 0.2),
-                                      trackShape: const RoundedRectSliderTrackShape(),
+                                      overlayColor: const Color(0xFFFF0000)
+                                          .withValues(alpha: 0.2),
+                                      trackShape:
+                                          const RoundedRectSliderTrackShape(),
                                     ),
                                     child: Slider(
-                                      value: widget.totalDuration.inMilliseconds > 0
-                                          ? widget.currentPosition.inMilliseconds.toDouble().clamp(0, widget.totalDuration.inMilliseconds.toDouble())
-                                          : 0,
+                                      value:
+                                          widget.totalDuration.inMilliseconds >
+                                                  0
+                                              ? widget.currentPosition
+                                                  .inMilliseconds
+                                                  .toDouble()
+                                                  .clamp(
+                                                      0,
+                                                      widget.totalDuration
+                                                          .inMilliseconds
+                                                          .toDouble())
+                                              : 0,
                                       min: 0,
-                                      max: widget.totalDuration.inMilliseconds.toDouble(),
-                                      onChangeStart: (_) => widget.onSeekStart(),
-                                      onChanged: (value) => widget.onSeek(value),
+                                      max: widget.totalDuration.inMilliseconds
+                                          .toDouble(),
+                                      onChangeStart: (_) =>
+                                          widget.onSeekStart(),
+                                      onChanged: (value) =>
+                                          widget.onSeek(value),
                                     ),
                                   ),
                                 ),
@@ -412,10 +453,11 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                               IconButton(
                                 onPressed: widget.onToggleFullScreen,
                                 icon: Icon(
-                                  widget.isFullScreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded, 
-                                  color: Colors.white, 
-                                  size: isPortrait ? 20 : 24
-                                ),
+                                    widget.isFullScreen
+                                        ? Icons.fullscreen_exit_rounded
+                                        : Icons.fullscreen_rounded,
+                                    color: Colors.white,
+                                    size: isPortrait ? 20 : 24),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                               ),
@@ -429,24 +471,39 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                                 children: [
                                   Expanded(
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         IconButton(
-                                          onPressed: widget.hasPrevEpisode ? widget.onPrevEpisode : null,
-                                          icon: Icon(Icons.skip_previous_rounded, color: widget.hasPrevEpisode ? Colors.white : Colors.white24, size: 22),
+                                          onPressed: widget.hasPrevEpisode
+                                              ? widget.onPrevEpisode
+                                              : null,
+                                          icon: Icon(
+                                              Icons.skip_previous_rounded,
+                                              color: widget.hasPrevEpisode
+                                                  ? Colors.white
+                                                  : Colors.white24,
+                                              size: 22),
                                           padding: const EdgeInsets.all(8),
                                           constraints: const BoxConstraints(),
                                         ),
                                         IconButton(
-                                          onPressed: widget.hasNextEpisode ? widget.onNextEpisode : null,
-                                          icon: Icon(Icons.skip_next_rounded, color: widget.hasNextEpisode ? Colors.white : Colors.white24, size: 22),
+                                          onPressed: widget.hasNextEpisode
+                                              ? widget.onNextEpisode
+                                              : null,
+                                          icon: Icon(Icons.skip_next_rounded,
+                                              color: widget.hasNextEpisode
+                                                  ? Colors.white
+                                                  : Colors.white24,
+                                              size: 22),
                                           padding: const EdgeInsets.all(8),
                                           constraints: const BoxConstraints(),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 24), // Match FS button width
+                                  const SizedBox(
+                                      width: 24), // Match FS button width
                                 ],
                               ),
                             ),
@@ -472,8 +529,9 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
   }
 
   Widget _buildSettingsOverlay(BuildContext context) {
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
-    
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
+
     if (isPortrait) {
       return _buildPortraitSettings(context);
     }
@@ -533,8 +591,10 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                 height: MediaQuery.of(context).size.height * 0.75,
                 decoration: BoxDecoration(
                   color: const Color(0xFF121212).withValues(alpha: 0.85),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 0.5),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(30)),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.1), width: 0.5),
                 ),
                 child: Material(
                   color: Colors.transparent,
@@ -605,22 +665,28 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                 _buildGrid(
                   items: const ['0.5', '1.0', '1.25', '1.5', '2.0'],
                   current: widget.playbackSpeed.toString(),
-                  onSelected: (v) => widget.onPlaybackSpeedChanged(double.parse(v)),
+                  onSelected: (v) =>
+                      widget.onPlaybackSpeedChanged(double.parse(v)),
                   itemLabel: (item) => '${item}x',
                 ),
-
                 const SizedBox(height: 8),
                 _buildAutoPlaySwitch(),
-
                 _buildSectionTitle('VIDEO QUALITY'),
+                if (kDebugMode && widget.availableQualities.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    child: Text('No qualities available',
+                        style: TextStyle(color: Colors.red, fontSize: 12)),
+                  ),
                 _buildGrid(
-                  items: widget.availableQualities.isNotEmpty 
-                      ? widget.availableQualities.map((q) => q['label']!).toList()
+                  items: widget.availableQualities.isNotEmpty
+                      ? widget.availableQualities
+                          .map((q) => q['label']!)
+                          .toList()
                       : ['auto'],
                   current: widget.selectedQuality,
                   onSelected: widget.onQualityChanged,
                 ),
-
                 _buildSectionTitle('AUDIO CONTENT'),
                 _buildGrid(
                   items: const ['sub', 'dub'],
@@ -628,27 +694,30 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                   onSelected: widget.onAudioTypeChanged,
                   itemLabel: (item) => item == 'sub' ? 'SUBTITLED' : 'DUBBED',
                 ),
-                
                 _buildSectionTitle('SUBTITLE LANGUAGE'),
                 _buildGrid(
-                  items: ['Off', ...widget.availableSubtitles.map((s) => s['label']!)],
+                  items: [
+                    'Off',
+                    ...widget.availableSubtitles.map((s) => s['label']!)
+                  ],
                   current: widget.selectedSubtitle,
                   onSelected: widget.onSubtitleChanged,
                 ),
-
                 _buildSectionTitle('AI REAL-TIME TRANSLATION'),
                 _buildGrid(
                   items: const ['none', 'id', 'en'],
                   current: widget.selectedAILang,
                   onSelected: widget.onAILangChanged,
-                  itemLabel: (item) => item == 'none' ? 'OFF' : item == 'id' ? 'INDONESIAN' : 'ENGLISH',
+                  itemLabel: (item) => item == 'none'
+                      ? 'OFF'
+                      : item == 'id'
+                          ? 'INDONESIAN'
+                          : 'ENGLISH',
                 ),
-
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Divider(color: Colors.white10, height: 1),
                 ),
-                
                 Text(
                   'APPEARANCE & STYLE',
                   style: GoogleFonts.inter(
@@ -659,7 +728,6 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
                 _buildStyleSlider(
                   label: 'Text Size',
                   value: widget.subtitleSize,
@@ -668,7 +736,6 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                   onChanged: widget.onSubtitleSizeChanged,
                   displayValue: '${widget.subtitleSize.toInt()}px',
                 ),
-                
                 _buildStyleSlider(
                   label: 'Vertical Offset',
                   value: widget.subtitleOffset,
@@ -677,7 +744,6 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                   onChanged: widget.onSubtitleOffsetChanged,
                   displayValue: '${widget.subtitleOffset.toInt()}',
                 ),
-
                 _buildStyleSlider(
                   label: 'Background Opacity',
                   value: widget.subtitleOpacity,
@@ -686,7 +752,6 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                   onChanged: widget.onSubtitleOpacityChanged,
                   displayValue: '${(widget.subtitleOpacity * 100).toInt()}%',
                 ),
-
                 _buildSectionTitle('SUBTITLE COLOR'),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 40),
@@ -694,7 +759,12 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                     spacing: 12,
                     runSpacing: 12,
                     children: [
-                      'white', '#FFFF00', '#00FFFF', '#00FF00', '#FF00FF', '#FFA500'
+                      'white',
+                      '#FFFF00',
+                      '#00FFFF',
+                      '#00FF00',
+                      '#FF00FF',
+                      '#FFA500'
                     ].map((colorStr) {
                       final color = _parseColor(colorStr);
                       final isSelected = widget.subtitleColor == colorStr;
@@ -708,16 +778,23 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
                             color: color,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: isSelected ? Colors.white : Colors.transparent,
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.transparent,
                               width: 2,
                             ),
-                            boxShadow: isSelected ? [
-                              BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 10)
-                            ] : null,
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                        color: color.withValues(alpha: 0.5),
+                                        blurRadius: 10)
+                                  ]
+                                : null,
                           ),
-                          child: isSelected 
-                            ? const Icon(Icons.check, size: 20, color: Colors.black)
-                            : null,
+                          child: isSelected
+                              ? const Icon(Icons.check,
+                                  size: 20, color: Colors.black)
+                              : null,
                         ),
                       );
                     }).toList(),
@@ -749,11 +826,17 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
             children: [
               Text(
                 label,
-                style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                style: GoogleFonts.inter(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500),
               ),
               Text(
                 displayValue,
-                style: GoogleFonts.robotoMono(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.bold),
+                style: GoogleFonts.robotoMono(
+                    color: AppColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -821,10 +904,14 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
             constraints: const BoxConstraints(minWidth: 80),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.1),
+              color: isSelected
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.05),
+                color: isSelected
+                    ? AppColors.primary
+                    : Colors.white.withValues(alpha: 0.05),
                 width: 1,
               ),
             ),
@@ -861,13 +948,20 @@ class _VideoPlayerControlsState extends State<VideoPlayerControls> {
         children: [
           Row(
             children: [
-              Icon(Icons.play_circle_outline_rounded, color: AppColors.primary, size: 20),
+              Icon(Icons.play_circle_outline_rounded,
+                  color: AppColors.primary, size: 20),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Auto Play', style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                  Text('Next episode automatically', style: GoogleFonts.inter(color: Colors.white38, fontSize: 11)),
+                  Text('Auto Play',
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                  Text('Next episode automatically',
+                      style: GoogleFonts.inter(
+                          color: Colors.white38, fontSize: 11)),
                 ],
               ),
             ],

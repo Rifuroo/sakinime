@@ -37,15 +37,18 @@ class StreamLink {
       serverId: json['serverId'] ?? json['id'] ?? json['post'],
       format: json['format'],
       note: json['note'],
-      headers: json['headers'] != null ? Map<String, String>.from(json['headers']) : null,
+      headers: json['headers'] != null
+          ? Map<String, String>.from(json['headers'])
+          : null,
     );
   }
 
-  bool get isIframe => type.toLowerCase() == 'iframe' || type.toLowerCase() == 'embed';
+  bool get isIframe =>
+      type.toLowerCase() == 'iframe' || type.toLowerCase() == 'embed';
   bool get isDirect => type == 'mp4' || type == 'hls';
   bool get isDownload => type.toLowerCase() == 'download';
   String get displayQuality => quality ?? 'Auto';
-  
+
   String get displayType {
     switch (type.toLowerCase()) {
       case 'iframe':
@@ -81,21 +84,22 @@ class StreamLink {
 // ✅ FIXED: Safe genre parsing that handles all API response formats
 List<String>? _parseGenreList(dynamic genreList) {
   if (genreList == null) return null;
-  
+
   try {
     // Case 1: Already a List
     if (genreList is List) {
       final result = <String>[];
-      
+
       // ✅ FIX: Use standard for loop instead of iterator to avoid index errors
       for (var i = 0; i < genreList.length; i++) {
         try {
           final item = genreList[i];
-          
+
           if (item is Map) {
-            final title = item['title']?.toString() ?? 
-                         item['name']?.toString() ?? 
-                         item['genreId']?.toString() ?? '';
+            final title = item['title']?.toString() ??
+                item['name']?.toString() ??
+                item['genreId']?.toString() ??
+                '';
             if (title.isNotEmpty) {
               result.add(title);
             }
@@ -107,32 +111,32 @@ List<String>? _parseGenreList(dynamic genreList) {
           continue;
         }
       }
-      
+
       return result.isEmpty ? null : result;
     }
-    
+
     // Case 2: Single Map object
     if (genreList is Map) {
-      final title = genreList['title']?.toString() ?? 
-                   genreList['name']?.toString() ?? 
-                   genreList['genreId']?.toString() ?? '';
+      final title = genreList['title']?.toString() ??
+          genreList['name']?.toString() ??
+          genreList['genreId']?.toString() ??
+          '';
       if (title.isNotEmpty) {
         return [title];
       }
     }
-    
+
     // Case 3: Single String
     if (genreList is String && genreList.isNotEmpty) {
       return [genreList];
     }
-    
   } catch (e) {
     if (kDebugMode) {
       print('⚠️ Error parsing genreList: $e');
       print('   genreList type: ${genreList.runtimeType}');
     }
   }
-  
+
   return null;
 }
 
@@ -177,39 +181,44 @@ class Anime {
     try {
       // ✅ STEP 1: Extract animeId - HiAnime API uses 'id' field
       String animeId = '';
-      
+
       // Priority: id > slug > animeId
       if (json['id'] != null && json['id'].toString().isNotEmpty) {
         animeId = json['id'].toString();
       } else if (json['slug'] != null && json['slug'].toString().isNotEmpty) {
         animeId = json['slug'].toString();
-      } else if (json['animeId'] != null && json['animeId'].toString().isNotEmpty) {
+      } else if (json['animeId'] != null &&
+          json['animeId'].toString().isNotEmpty) {
         animeId = json['animeId'].toString();
       } else if (json['href'] != null) {
-        animeId = json['href'].toString().replaceAll('/anime/', '').split('/').last;
+        animeId =
+            json['href'].toString().replaceAll('/anime/', '').split('/').last;
       }
-      
+
       animeId = animeId.replaceAll('/', '').trim();
-      
+
       if (kDebugMode) print('   ✅ animeId: $animeId');
-      
+
       // ✅ STEP 2: Extract title - HiAnime uses 'title' or 'alternativeTitle'
-      String animeTitle = json['title']?.toString() ?? 
-                         json['alternativeTitle']?.toString() ?? 
-                         json['anime_name']?.toString() ?? '';
-      
+      String animeTitle = json['title']?.toString() ??
+          json['alternativeTitle']?.toString() ??
+          json['anime_name']?.toString() ??
+          '';
+
       // ✅ STEP 3: Extract poster - HiAnime uses 'poster'
-      String posterImage = json['poster']?.toString() ?? json['image']?.toString() ?? '';
-      
+      String posterImage =
+          json['poster']?.toString() ?? json['image']?.toString() ?? '';
+
       if (posterImage.isEmpty) {
-        final shortTitle = animeTitle.length > 20 
-            ? animeTitle.substring(0, 20) + "..." 
+        final shortTitle = animeTitle.length > 20
+            ? animeTitle.substring(0, 20) + "..."
             : animeTitle;
-        posterImage = 'https://placehold.co/300x400/1a1f3a/white?text=${Uri.encodeComponent(shortTitle)}';
+        posterImage =
+            'https://placehold.co/300x400/1a1f3a/white?text=${Uri.encodeComponent(shortTitle)}';
       }
-      
+
       if (kDebugMode) print('   ✅ Title & poster OK');
-      
+
       // ✅ STEP 4: Extract episodes - HiAnime uses 'episodes' object with sub/dub/eps
       int? totalEps;
       if (json['episodes'] is Map) {
@@ -223,22 +232,22 @@ class Anime {
       } else if (json['episodes'] != null) {
         totalEps = int.tryParse(json['episodes'].toString());
       }
-      
+
       if (kDebugMode) print('   ✅ Episodes OK');
-      
+
       // ✅ STEP 5: Extract latest episode
       String? latestEp;
       try {
-        latestEp = json['current_episode']?.toString() ?? 
-                   json['newest_release_date']?.toString() ??
-                   json['last_release_date']?.toString() ??
-                   json['releasedOn']?.toString();
+        latestEp = json['current_episode']?.toString() ??
+            json['newest_release_date']?.toString() ??
+            json['last_release_date']?.toString() ??
+            json['releasedOn']?.toString();
       } catch (e) {
         latestEp = null;
       }
 
       if (kDebugMode) print('   🎬 Parsing genres...');
-      
+
       // ✅ STEP 6: Parse genres safely
       List<String>? genreList;
       try {
@@ -260,67 +269,79 @@ class Anime {
       // ✅ STEP 7: Extract all other fields safely
       String? synopsisText;
       try {
-        synopsisText = json['synopsis']?.toString() ?? json['description']?.toString();
+        synopsisText =
+            json['synopsis']?.toString() ?? json['description']?.toString();
       } catch (e) {
         synopsisText = null;
       }
-      
+
       String? animeUrl;
       try {
-        animeUrl = json['samehadakuUrl']?.toString() ?? json['otakudesuUrl']?.toString();
+        animeUrl = json['samehadakuUrl']?.toString() ??
+            json['otakudesuUrl']?.toString() ??
+            json['kuramanimeUrl']?.toString();
       } catch (e) {
         animeUrl = null;
       }
-      
+
       String? episodeText;
       try {
         episodeText = json['episode']?.toString();
       } catch (e) {
         episodeText = null;
       }
-      
+
       String? statusText;
       try {
         statusText = json['status']?.toString();
       } catch (e) {
         statusText = null;
       }
-      
+
       String? typeText;
       try {
         typeText = json['type']?.toString();
       } catch (e) {
         typeText = null;
       }
-      
+
       // ✅ STEP 8: Extract rating/score safely - Match Expo's extensive fallbacks
       String? ratingText;
       String? scoreText;
-      
+
       try {
         // Check list of possible score/rating fields
         final possibleFields = [
-          'malScore', 'averageScore', 'MAL_score', 'rating', 'score', 'stats.rating', 'moreInfo.score'
+          'malScore',
+          'averageScore',
+          'MAL_score',
+          'rating',
+          'score',
+          'stats.rating',
+          'moreInfo.score'
         ];
 
         for (var field in possibleFields) {
-           dynamic val;
-           if (field.contains('.')) {
-              final parts = field.split('.');
-              val = json[parts[0]]?[parts[1]];
-           } else {
-              val = json[field];
-           }
+          dynamic val;
+          if (field.contains('.')) {
+            final parts = field.split('.');
+            final parent = json[parts[0]];
+            val = parent is Map ? parent[parts[1]] : null;
+          } else {
+            val = json[field];
+          }
 
-           if (val != null && val.toString().isNotEmpty && val.toString() != 'null') {
-              if (val is Map && val['value'] != null) {
-                ratingText = val['value'].toString();
-                break;
-              } else {
-                ratingText = val.toString();
-                break;
-              }
-           }
+          if (val != null &&
+              val.toString().isNotEmpty &&
+              val.toString() != 'null') {
+            if (val is Map && val['value'] != null) {
+              ratingText = val['value'].toString();
+              break;
+            } else {
+              ratingText = val.toString();
+              break;
+            }
+          }
         }
         scoreText = ratingText;
       } catch (e) {
@@ -346,10 +367,11 @@ class Anime {
         type: typeText,
         score: scoreText,
         genres: genreList,
-        nextEpisodeDate: json['nextEpisodeDate']?.toString() ?? 
-                         json['airing_at']?.toString() ?? 
-                         json['next_episode_at']?.toString(),
-        bannerImage: json['bannerImage']?.toString() ?? json['image']?.toString(),
+        nextEpisodeDate: json['nextEpisodeDate']?.toString() ??
+            json['airing_at']?.toString() ??
+            json['next_episode_at']?.toString(),
+        bannerImage:
+            json['bannerImage']?.toString() ?? json['image']?.toString(),
         description: synopsisText,
       );
     } catch (e, stackTrace) {
@@ -429,13 +451,16 @@ class AnimeDetail {
   factory AnimeDetail.fromJson(Map<String, dynamic> json) {
     // Better title handling with priority
     String animeTitle = json['title']?.toString().trim() ?? '';
-    
+
     if (animeTitle.isEmpty) {
-      if (json['english'] != null && json['english'].toString().trim().isNotEmpty) {
+      if (json['english'] != null &&
+          json['english'].toString().trim().isNotEmpty) {
         animeTitle = json['english'].toString().trim();
-      } else if (json['japanese'] != null && json['japanese'].toString().trim().isNotEmpty) {
+      } else if (json['japanese'] != null &&
+          json['japanese'].toString().trim().isNotEmpty) {
         animeTitle = json['japanese'].toString().trim();
-      } else if (json['synonyms'] != null && json['synonyms'].toString().trim().isNotEmpty) {
+      } else if (json['synonyms'] != null &&
+          json['synonyms'].toString().trim().isNotEmpty) {
         animeTitle = json['synonyms'].toString().trim();
       } else {
         animeTitle = 'Unknown Title';
@@ -448,13 +473,11 @@ class AnimeDetail {
 
     // ✅ FIX: Parse episodes dengan multiple field names
     final episodes = <Episode>[];
-    
+
     // Try berbagai field names yang mungkin digunakan API
-    final episodesList = json['episode_lists'] ?? 
-                        json['episodeList'] ?? 
-                        json['episodes'] ?? 
-                        [];
-    
+    final episodesList =
+        json['episode_lists'] ?? json['episodeList'] ?? json['episodes'] ?? [];
+
     if (kDebugMode) {
       print('🎬 Parsing episodes from: ${episodesList.runtimeType}');
       if (episodesList is List) {
@@ -466,7 +489,7 @@ class AnimeDetail {
         }
       }
     }
-    
+
     if (episodesList is List && episodesList.isNotEmpty) {
       for (var i = 0; i < episodesList.length; i++) {
         try {
@@ -478,7 +501,7 @@ class AnimeDetail {
         }
       }
     }
-    
+
     if (kDebugMode) {
       print('✅ Successfully parsed ${episodes.length} episodes');
       if (episodes.isNotEmpty) {
@@ -492,7 +515,7 @@ class AnimeDetail {
 
     // Build info map
     final info = <String, String>{};
-    
+
     if (json['score'] != null) {
       if (json['score'] is Map && json['score']['value'] != null) {
         info['Score'] = json['score']['value'].toString();
@@ -500,15 +523,17 @@ class AnimeDetail {
         info['Score'] = json['score'].toString();
       }
     }
-    
+
     if (json['rating'] != null) info['Rating'] = json['rating'].toString();
     if (json['type'] != null) info['Type'] = json['type'].toString();
     if (json['status'] != null) info['Status'] = json['status'].toString();
     if (json['status'] != null) info['Status'] = json['status'].toString();
     // ✅ Use totalEpisodes instead of episodes array
-    if (json['totalEpisodes'] != null) info['Total Episodes'] = json['totalEpisodes'].toString();
-    if (json['duration'] != null) info['Duration'] = json['duration'].toString();
-    
+    if (json['totalEpisodes'] != null)
+      info['Total Episodes'] = json['totalEpisodes'].toString();
+    if (json['duration'] != null)
+      info['Duration'] = json['duration'].toString();
+
     // ✅ Formatting Aired Date
     if (json['aired'] != null) {
       final airedData = json['aired'];
@@ -526,56 +551,75 @@ class AnimeDetail {
         info['Aired'] = airedData.toString();
       }
     }
-    
-    if (json['premiered'] != null) info['Premiered'] = json['premiered'].toString();
-    
+
+    if (json['premiered'] != null)
+      info['Premiered'] = json['premiered'].toString();
+
     // ✅ FIX: Handle studios/producers as List or String
     if (json['studios'] != null) {
       if (json['studios'] is List) {
-        info['Studio'] = (json['studios'] as List).map((e) => e is Map ? e['name'] ?? e.toString() : e.toString()).join(', ');
+        info['Studio'] = (json['studios'] as List)
+            .map((e) => e is Map ? e['name'] ?? e.toString() : e.toString())
+            .join(', ');
       } else {
         info['Studio'] = json['studios'].toString();
       }
     }
     if (json['producers'] != null) {
       if (json['producers'] is List) {
-        info['Producers'] = (json['producers'] as List).map((e) => e is Map ? e['name'] ?? e.toString() : e.toString()).join(', ');
+        info['Producers'] = (json['producers'] as List)
+            .map((e) => e is Map ? e['name'] ?? e.toString() : e.toString())
+            .join(', ');
       } else {
         info['Producers'] = json['producers'].toString();
       }
     }
-    
+
     if (json['season'] != null) info['Season'] = json['season'].toString();
     if (json['source'] != null) info['Source'] = json['source'].toString();
     // ✅ Add subOrDub info from Zoro
     if (json['subOrDub'] != null) info['Sub/Dub'] = json['subOrDub'].toString();
+    if (json['kuramanimeUrl'] != null)
+      info['Kuramanime URL'] = json['kuramanimeUrl'].toString();
     // ✅ Add MAL score
-    if (json['MAL_score'] != null) info['MAL Score'] = json['MAL_score'].toString();
+    if (json['MAL_score'] != null)
+      info['MAL Score'] = json['MAL_score'].toString();
 
     // ✅ Synopsis - check both description and synopsis
     String synopsisText = 'Synopsis not available.';
-    
+
     // Priority 1: description field (Zoro API)
-    if (json['description'] != null && json['description'].toString().trim().isNotEmpty) {
+    if (json['description'] != null &&
+        json['description'].toString().trim().isNotEmpty) {
       synopsisText = json['description'].toString().trim();
     }
     // Priority 2: synopsis field
     else if (json['synopsis'] != null) {
       final synopsisData = json['synopsis'];
-      if (synopsisData is Map && synopsisData['paragraphs'] is List) {
-        final paragraphs = synopsisData['paragraphs'] as List;
-        if (paragraphs.isNotEmpty) {
-          synopsisText = paragraphs.join('\n\n');
+      if (synopsisData is Map) {
+        // OtakuDesu use 'paragraphList', Zoro use 'paragraphs'
+        final paragraphs =
+            synopsisData['paragraphList'] ?? synopsisData['paragraphs'];
+        if (paragraphs is List && paragraphs.isNotEmpty) {
+          synopsisText = paragraphs
+              .map((p) => p.toString().trim())
+              .where((p) => p.isNotEmpty)
+              .join('\n\n');
+        } else if (synopsisData['text'] != null) {
+          synopsisText = synopsisData['text'].toString();
         }
       } else if (synopsisData is String && synopsisData.isNotEmpty) {
         synopsisText = synopsisData;
       }
     }
 
+    if (synopsisText.trim().isEmpty) synopsisText = 'Synopsis not available.';
+
     // ✅ FIXED: Use safe genre parsing - Match Expo's fallbacks
-    final genreList = _parseGenreList(
-      json['genreList'] ?? json['genres'] ?? json['moreInfo']?['genres']
-    );
+    final moreInfo = json['moreInfo'];
+    final genreList = _parseGenreList(json['genreList'] ??
+        json['genres'] ??
+        (moreInfo is Map ? moreInfo['genres'] : null));
 
     // Batch info
     Map<String, dynamic>? batchInfo;
@@ -586,25 +630,44 @@ class AnimeDetail {
     // Poster
     String posterImage = json['poster'] ?? json['image'] ?? '';
     if (posterImage.isEmpty) {
-      final shortTitle = animeTitle.length > 20 
-          ? animeTitle.substring(0, 20) + "..." 
+      final shortTitle = animeTitle.length > 20
+          ? animeTitle.substring(0, 20) + "..."
           : animeTitle;
-      posterImage = 'https://placehold.co/300x400/1a1f3a/white?text=${Uri.encodeComponent(shortTitle)}';
+      posterImage =
+          'https://placehold.co/300x400/1a1f3a/white?text=${Uri.encodeComponent(shortTitle)}';
     }
 
     // ✅ Related & Recommended
     final related = <Anime>[];
     if (json['relatedAnimes'] is List) {
       for (var item in json['relatedAnimes']) {
-        try { related.add(Anime.fromJson(Map<String, dynamic>.from(item))); } catch (_) {}
+        try {
+          related.add(Anime.fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {}
       }
     }
-    
+
     final recommended = <Anime>[];
     if (json['recommendedAnimes'] is List) {
       for (var item in json['recommendedAnimes']) {
-        try { recommended.add(Anime.fromJson(Map<String, dynamic>.from(item))); } catch (_) {}
+        try {
+          recommended.add(Anime.fromJson(Map<String, dynamic>.from(item)));
+        } catch (_) {}
       }
+    }
+
+    // Parse rating/score safely
+    String? scoreStr;
+    final scoreData = json['score'];
+    if (scoreData is Map) {
+      scoreStr =
+          scoreData['value']?.toString() ?? scoreData['score']?.toString();
+    } else if (scoreData != null) {
+      scoreStr = scoreData.toString();
+    }
+
+    if (scoreStr == null || scoreStr.isEmpty || scoreStr == 'null') {
+      scoreStr = json['rating']?.toString();
     }
 
     return AnimeDetail(
@@ -614,17 +677,17 @@ class AnimeDetail {
       synopsis: synopsisText,
       episodes: episodes,
       info: info,
-      status: json['status'],
-      rating: json['score']?['value']?.toString() ?? json['rating']?.toString(),
+      status: json['status']?.toString(),
+      rating: scoreStr,
       genres: genreList,
       batch: batchInfo,
-      type: json['type'],
-      score: json['score']?['value']?.toString() ?? json['rating']?.toString(),
+      type: json['type']?.toString(),
+      score: scoreStr,
       relatedAnime: related,
       recommendedAnime: recommended,
-      nextEpisodeDate: json['nextEpisodeDate']?.toString() ?? 
-                         json['airing_at']?.toString() ?? 
-                         json['next_episode_at']?.toString(),
+      nextEpisodeDate: json['nextEpisodeDate']?.toString() ??
+          json['airing_at']?.toString() ??
+          json['next_episode_at']?.toString(),
       bannerImage: json['bannerImage']?.toString() ?? json['image']?.toString(),
     );
   }
@@ -671,14 +734,16 @@ class Character {
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
       id: json['id']?.toString() ?? json['character_id']?.toString() ?? '',
-      name: json['name']?.toString() ?? json['character_name']?.toString() ?? 'Unknown',
-      image: json['imageUrl']?.toString() ?? json['image']?.toString() ?? json['poster']?.toString(),
+      name: json['name']?.toString() ??
+          json['character_name']?.toString() ??
+          'Unknown',
+      image: json['imageUrl']?.toString() ??
+          json['image']?.toString() ??
+          json['poster']?.toString(),
       role: json['role']?.toString(),
     );
   }
 }
-
-
 
 class Episode {
   final String number;
@@ -699,10 +764,10 @@ class Episode {
     if (kDebugMode) {
       print('🔍 Episode.fromJson: $json');
     }
-    
+
     String episodeTitle = '';
     int? episodeNum;
-    
+
     // ✅ HiAnime uses episodeNumber directly
     if (json['episodeNumber'] != null) {
       if (json['episodeNumber'] is int) {
@@ -722,26 +787,39 @@ class Episode {
       if (kDebugMode) print('   📍 number: $episodeNum');
     }
 
+    // Indo source fallback: Title is often the number
+    if (episodeNum == null && json['title'] != null) {
+      final titleStr = json['title'].toString().trim();
+      // If title is just a number (e.g. "9")
+      final parsed = int.tryParse(titleStr);
+      if (parsed != null) {
+        episodeNum = parsed;
+        if (kDebugMode) print('   📍 number from title: $episodeNum');
+      }
+    }
+
     // Title
     if (json['title'] != null && json['title'].toString().isNotEmpty) {
       episodeTitle = json['title'].toString();
     } else if (episodeNum != null) {
       episodeTitle = 'Episode $episodeNum';
     }
-    
+
     // Legacy fallback
     if (episodeNum == null && json['episode_number'] != null) {
       episodeNum = int.tryParse(json['episode_number'].toString());
-      if (episodeTitle.isEmpty && episodeNum != null) episodeTitle = 'Episode $episodeNum';
+      if (episodeTitle.isEmpty && episodeNum != null)
+        episodeTitle = 'Episode $episodeNum';
     }
-    
+
     String episodeUrl = '';
-    
+
     // ✅ Zoro uses `id` for episode id - Match Expo's episodeId fallback
     if (json['id'] != null && json['id'].toString().isNotEmpty) {
       episodeUrl = json['id'].toString();
       if (kDebugMode) print('   ✅ URL from id: $episodeUrl');
-    } else if (json['episodeId'] != null && json['episodeId'].toString().isNotEmpty) {
+    } else if (json['episodeId'] != null &&
+        json['episodeId'].toString().isNotEmpty) {
       episodeUrl = json['episodeId'].toString();
       if (kDebugMode) print('   ✅ URL from episodeId: $episodeUrl');
     } else if (json['slug'] != null && json['slug'].toString().isNotEmpty) {
@@ -755,16 +833,16 @@ class Episode {
         if (kDebugMode) print('   ✅ URL from href: $episodeUrl');
       }
     }
-    
+
     // Clean URL
     episodeUrl = episodeUrl.trim().replaceAll(RegExp(r'^/+|/+$'), '');
-    
+
     String episodeDate = json['otakudesu_url'] ?? json['samehadakuUrl'] ?? '';
-    
+
     if (kDebugMode) {
       print('   🎯 FINAL: Ep $episodeNum -> "$episodeUrl"');
     }
-    
+
     return Episode(
       number: episodeNum?.toString() ?? json['number']?.toString() ?? '?',
       date: episodeDate,
@@ -809,18 +887,19 @@ class ScheduleItem {
         if (parts.length == 2) {
           int hour = int.parse(parts[0]);
           int minute = int.parse(parts[1]);
-          
+
           // Subtract 2 hours for WIB
           hour -= 2;
           if (hour < 0) hour += 24;
-          
-          convertedTime = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+          convertedTime =
+              '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
         }
       } catch (e) {
         // Keep original time if conversion fails
       }
     }
-    
+
     return ScheduleItem(
       id: json['id']?.toString(),
       time: convertedTime,
