@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:media_kit_video/media_kit_video.dart'; 
+import 'package:media_kit_video/media_kit_video.dart';
 import '../providers/global_player_provider.dart';
 import '../utils/platform_utils.dart';
 import '../utils/navigator_key.dart';
@@ -41,62 +41,69 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
   Widget build(BuildContext context) {
     return Consumer<GlobalPlayerProvider>(
       builder: (context, player, child) {
-        if (!player.isInitialized || player.currentEpisode == null || player.isFullPlayerActive) {
+        if (!player.isInitialized ||
+            player.currentEpisode == null ||
+            player.isFullPlayerActive) {
           return const SizedBox.shrink();
         }
 
-        final width = PlatformUtils.isDesktop ? 320.0 : null; // Fixed width
-        final height = PlatformUtils.isDesktop ? 180.0 : 70.0;
+        final screenSize = MediaQuery.of(context).size;
+        final isDesktop = PlatformUtils.isDesktop;
+        final width = isDesktop ? 320.0 : (screenSize.width - 24.0);
+        final height = isDesktop ? 180.0 : 70.0;
 
         return Positioned(
-          left: _left,
+          left: _left ?? (isDesktop ? null : 12.0),
           top: _top,
-          right: _right,
-          bottom: _bottom,
+          right: _left != null ? null : (isDesktop ? (_right ?? 20.0) : null),
+          bottom: _top != null ? null : (_bottom ?? (isDesktop ? 20.0 : 90.0)),
           width: width,
           height: height,
           child: GestureDetector(
             onPanStart: (details) {
-               // Lock position to absolute coordinates on start drag
-               if (_left == null && context.mounted) {
-                  final RenderBox box = context.findRenderObject() as RenderBox;
-                  // Use localToGlobal to find where we are relative to the Screen/Stack
-                  // Assuming Stack is full screen in main.dart
-                  final pos = box.localToGlobal(Offset.zero);
-                  setState(() {
-                    _left = pos.dx;
-                    _top = pos.dy;
-                    _right = null;
-                    _bottom = null;
-                  });
-               }
+              // Lock position to absolute coordinates on start drag
+              if (_left == null && context.mounted) {
+                final RenderBox box = context.findRenderObject() as RenderBox;
+                // Use localToGlobal to find where we are relative to the Screen/Stack
+                // Assuming Stack is full screen in main.dart
+                final pos = box.localToGlobal(Offset.zero);
+                setState(() {
+                  _left = pos.dx;
+                  _top = pos.dy;
+                  _right = null;
+                  _bottom = null;
+                });
+              }
             },
             onPanUpdate: (details) {
               final screenSize = MediaQuery.of(context).size;
               // MiniPlayer dimensions
-              final w = width ?? 300.0; // Fallback for mobile if width is null
+              final w = width; // width is now double, no longer nullable
               final h = height;
 
               setState(() {
-                _left = ((_left ?? 0) + details.delta.dx).clamp(0.0, screenSize.width - w);
-                _top = ((_top ?? 0) + details.delta.dy).clamp(0.0, screenSize.height - h);
+                _left = ((_left ?? 0) + details.delta.dx)
+                    .clamp(0.0, screenSize.width - w);
+                _top = ((_top ?? 0) + details.delta.dy)
+                    .clamp(0.0, screenSize.height - h);
                 _right = null;
                 _bottom = null;
               });
             },
             onTap: () {
-               if (player.currentEpisode != null && player.currentAnimeId != null) {
-                 navigatorKey.currentState?.push(
-                   MaterialPageRoute(
-                     builder: (context) => AnimeVideoPlayer(
-                       episodeToLoad: player.currentEpisode!,
-                       animeId: player.currentAnimeId!,
-                       animeTitle: player.currentAnimeTitle ?? 'Anime',
-                       animePoster: player.currentAnimePoster,
-                     ),
-                   ),
-                 );
-               }
+              if (player.currentEpisode != null &&
+                  player.currentAnimeId != null) {
+                navigatorKey.currentState?.push(
+                  MaterialPageRoute(
+                    builder: (context) => AnimeVideoPlayer(
+                      episodeToLoad: player.currentEpisode!,
+                      animeId: player.currentAnimeId!,
+                      animeTitle: player.currentAnimeTitle ?? 'Anime',
+                      animePoster: player.currentAnimePoster,
+                    ),
+                  ),
+                );
+              }
             },
             child: Container(
               decoration: BoxDecoration(
@@ -127,7 +134,7 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                              if (player.currentAnimePoster != null)
+                            if (player.currentAnimePoster != null)
                               CachedNetworkImage(
                                 imageUrl: player.currentAnimePoster!,
                                 fit: BoxFit.cover,
@@ -135,15 +142,30 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
                             // Overlay Video if playing
                             if (player.isInitialized)
                               FittedBox(
-                                  fit: BoxFit.contain,
-                                  child: SizedBox(
-                                  width: (player.controller.player.state.width ?? 0) > 0 ? (player.controller.player.state.width ?? 1280).toDouble() : 1280,
-                                  height: (player.controller.player.state.height ?? 0) > 0 ? (player.controller.player.state.height ?? 720).toDouble() : 720,
+                                fit: BoxFit.contain,
+                                child: SizedBox(
+                                  width: (player.controller.player.state
+                                                  .width ??
+                                              0) >
+                                          0
+                                      ? (player.controller.player.state.width ??
+                                              1280)
+                                          .toDouble()
+                                      : 1280,
+                                  height:
+                                      (player.controller.player.state.height ??
+                                                  0) >
+                                              0
+                                          ? (player.controller.player.state
+                                                      .height ??
+                                                  720)
+                                              .toDouble()
+                                          : 720,
                                   child: Video(
-                                      controller: player.controller,
-                                      controls: (state) => const SizedBox(),
+                                    controller: player.controller,
+                                    controls: (state) => const SizedBox(),
                                   ),
-                                  ),
+                                ),
                               ),
 
                             // SUBTITLES
@@ -154,7 +176,7 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
                                 fontSize: 16,
                                 bottomOffset: 10,
                               ),
-                            
+
                             // Desktop Controls Overlays (Pause/Close)
                             if (PlatformUtils.isDesktop)
                               Positioned(
@@ -163,7 +185,9 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
                                 child: Row(
                                   children: [
                                     _buildCircleButton(
-                                      icon: player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                      icon: player.isPlaying
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
                                       onTap: player.togglePlay,
                                     ),
                                     const SizedBox(width: 5),
@@ -178,63 +202,67 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
                         ),
                       ),
                     ),
-                    
+
                     // Title for Mobile (Hidden on Desktop Draggable 16:9 view usually, but we can show overlay)
                     if (!PlatformUtils.isDesktop)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              player.currentAnimeTitle ?? 'Anime',
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                player.currentAnimeTitle ?? 'Anime',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Episode ${player.currentEpisode?.number ?? '?'}',
-                              style: GoogleFonts.inter(
-                                color: Colors.white70,
-                                fontSize: 11,
+                              const SizedBox(height: 2),
+                              Text(
+                                'Episode ${player.currentEpisode?.number ?? '?'}',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    if (!PlatformUtils.isDesktop)
-                    // Controls
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          onPressed: player.togglePlay,
-                          icon: Icon(
-                            player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            color: Colors.white,
+                            ],
                           ),
                         ),
-                        IconButton(
-                          onPressed: () {
-                            player.pause();
-                            // Optional: clearCurrentEpisode()
-                          },
-                          icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
+                      ),
+
+                    if (!PlatformUtils.isDesktop)
+                      // Controls
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: player.togglePlay,
+                            icon: Icon(
+                              player.isPlaying
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              player.pause();
+                              // Optional: clearCurrentEpisode()
+                            },
+                            icon: const Icon(Icons.close_rounded,
+                                color: Colors.white70, size: 20),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -244,7 +272,9 @@ class _MiniPlayerWidgetState extends State<MiniPlayerWidget> {
       },
     );
   }
-  Widget _buildCircleButton({required IconData icon, required VoidCallback onTap}) {
+
+  Widget _buildCircleButton(
+      {required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(

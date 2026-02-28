@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:provider/provider.dart';
 import '../models/anime_model.dart';
 import '../widgets/anime_card.dart';
 import '../constants/app_colors.dart';
+import '../providers/anime_provider.dart';
 import 'detail_anime_screen.dart';
 
 class BrowseScreen extends StatefulWidget {
@@ -21,17 +21,62 @@ class BrowseScreen extends StatefulWidget {
   State<BrowseScreen> createState() => _BrowseScreenState();
 }
 
-class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderStateMixin {
+class _BrowseScreenState extends State<BrowseScreen>
+    with SingleTickerProviderStateMixin {
   // Constants
   static const List<String> genres = [
-    'Action', 'Adventure', 'Cars', 'Comedy', 'Dementia', 'Demons', 'Mystery', 'Drama', 'Ecchi',
-    'Fantasy', 'Game', 'Historical', 'Horror', 'Kids', 'Magic', 'Martial Arts', 'Mecha', 'Music',
-    'Parody', 'Samurai', 'Romance', 'School', 'Sci-Fi', 'Shoujo', 'Shoujo Ai', 'Shounen',
-    'Shounen Ai', 'Space', 'Sports', 'Super Power', 'Vampire', 'Harem', 'Slice of Life',
-    'Supernatural', 'Military', 'Police', 'Psychological', 'Thriller', 'Seinen', 'Josei', 'Isekai'
+    'Action',
+    'Adventure',
+    'Cars',
+    'Comedy',
+    'Dementia',
+    'Demons',
+    'Mystery',
+    'Drama',
+    'Ecchi',
+    'Fantasy',
+    'Game',
+    'Historical',
+    'Horror',
+    'Kids',
+    'Magic',
+    'Martial Arts',
+    'Mecha',
+    'Music',
+    'Parody',
+    'Samurai',
+    'Romance',
+    'School',
+    'Sci-Fi',
+    'Shoujo',
+    'Shoujo Ai',
+    'Shounen',
+    'Shounen Ai',
+    'Space',
+    'Sports',
+    'Super Power',
+    'Vampire',
+    'Harem',
+    'Slice of Life',
+    'Supernatural',
+    'Military',
+    'Police',
+    'Psychological',
+    'Thriller',
+    'Seinen',
+    'Josei',
+    'Isekai'
   ];
 
-  static const List<String> types = ['all', 'movie', 'tv', 'ova', 'special', 'music', 'ona'];
+  static const List<String> types = [
+    'all',
+    'movie',
+    'tv',
+    'ova',
+    'special',
+    'music',
+    'ona'
+  ];
 
   static const List<Map<String, String>> categories = [
     {'id': 'most-popular', 'name': 'Most Popular'},
@@ -68,7 +113,7 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize from params
     if (widget.initialCategory != null) {
       _selectedCategory = widget.initialCategory!;
@@ -104,7 +149,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       if (!_isLoadingMore && _hasNextPage) {
         _fetchData(_currentPage + 1);
       }
@@ -123,45 +169,24 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
     });
 
     try {
-      const baseUrl = 'https://hianime-api-seven-steel.vercel.app/api/v1/animes';
-      String url;
+      final animeProvider = Provider.of<AnimeProvider>(context, listen: false);
 
-      if (_selectedGenre != null && _selectedGenre!.isNotEmpty) {
-        String genrePath = _selectedGenre!.toLowerCase().replaceAll(' ', '-');
-        if (genrePath == 'martial-arts') genrePath = 'marial-arts';
-        url = '$baseUrl/genre/$genrePath';
-      } else if (_selectedCategory.isNotEmpty) {
-        url = '$baseUrl/$_selectedCategory';
-      } else {
-        url = '$baseUrl/most-popular';
-      }
+      await animeProvider.fetchBrowseAnimes(
+        category: _selectedCategory,
+        genre: _selectedGenre,
+        type: _selectedType,
+        page: page,
+      );
 
-      final fetchUrl = '$url?page=$page${_selectedType != 'all' ? '&type=$_selectedType' : ''}';
-      final response = await http.get(Uri.parse(fetchUrl));
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        final realData = json['data'] ?? json;
-
-        if (realData['response'] != null) {
-          final List<dynamic> animeData = realData['response'];
-          final List<Anime> newAnime = animeData
-              .map((item) => _mapAnimeCard(item))
-              .where((anime) => anime != null)
-              .cast<Anime>()
-              .toList();
-
-          setState(() {
-            if (reset) {
-              _animeList = newAnime;
-            } else {
-              _animeList.addAll(newAnime);
-            }
-            _hasNextPage = realData['pageInfo']?['hasNextPage'] ?? false;
-            _currentPage = page;
-          });
+      setState(() {
+        if (page == 1) {
+          _animeList = List.from(animeProvider.allAnimes);
+        } else {
+          _animeList = List.from(animeProvider.allAnimes);
         }
-      }
+        _hasNextPage = animeProvider.hasMorePages;
+        _currentPage = page;
+      });
     } catch (e) {
       debugPrint('Error fetching browse data: $e');
     } finally {
@@ -169,21 +194,6 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         _isLoading = false;
         _isLoadingMore = false;
       });
-    }
-  }
-
-  Anime? _mapAnimeCard(Map<String, dynamic> item) {
-    try {
-      return Anime(
-        id: item['id'] ?? '',
-        title: item['name'] ?? item['title'] ?? 'Unknown',
-        poster: item['poster'] ?? '',
-        rating: item['rating']?.toString(),
-        type: item['type'],
-        status: item['status'],
-      );
-    } catch (e) {
-      return null;
     }
   }
 
@@ -229,13 +239,13 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
               children: [
                 // Header
                 _buildHeader(),
-                
+
                 // Category Tabs
                 _buildCategoryTabs(),
-                
+
                 // Filter Panel
                 _buildFilterPanel(),
-                
+
                 // Anime Grid
                 Expanded(
                   child: _isLoading
@@ -299,8 +309,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final category = categories[index];
-          final isSelected = _selectedCategory == category['id'] && _selectedGenre == null;
-          
+          final isSelected =
+              _selectedCategory == category['id'] && _selectedGenre == null;
+
           return GestureDetector(
             onTap: () => _onCategorySelected(category['id']!),
             child: Container(
@@ -363,14 +374,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 itemBuilder: (context, index) {
                   final genre = genres[index];
                   final isSelected = _selectedGenre == genre;
-                  
+
                   return GestureDetector(
                     onTap: () => _onGenreSelected(genre),
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.1),
+                        color: isSelected
+                            ? AppColors.primary
+                            : Colors.white.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Text(
@@ -378,7 +392,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         style: GoogleFonts.inter(
                           color: isSelected ? Colors.black : Colors.white70,
                           fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
                         ),
                       ),
                     ),
@@ -386,9 +401,9 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 },
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Type Filter
             Text(
               'Type',
@@ -407,14 +422,17 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                 itemBuilder: (context, index) {
                   final type = types[index];
                   final isSelected = _selectedType == type;
-                  
+
                   return GestureDetector(
                     onTap: () => _onTypeSelected(type),
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : Colors.white.withValues(alpha: 0.1),
+                        color: isSelected
+                            ? AppColors.primary
+                            : Colors.white.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Text(
@@ -422,7 +440,8 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
                         style: GoogleFonts.inter(
                           color: isSelected ? Colors.black : Colors.white70,
                           fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
                         ),
                       ),
                     ),
@@ -461,10 +480,15 @@ class _BrowseScreenState extends State<BrowseScreen> with SingleTickerProviderSt
         return AnimeCard(
           anime: anime,
           onTap: () {
+            final animeProvider =
+                Provider.of<AnimeProvider>(context, listen: false);
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => DetailAnimeScreen(animeId: anime.id),
+                builder: (context) => DetailAnimeScreen(
+                  animeId: anime.id,
+                  forceHiAnime: animeProvider.isHiAnime,
+                ),
               ),
             );
           },

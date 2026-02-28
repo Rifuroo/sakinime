@@ -17,6 +17,9 @@ enum HomeCollectionType {
   topAiring,
   mostPopular,
   mostFavorite,
+  ongoing,
+  completed,
+  movies,
 }
 
 extension HomeSidebarCategoryX on HomeSidebarCategory {
@@ -49,6 +52,12 @@ extension HomeCollectionTypeX on HomeCollectionType {
         return 'Most Popular';
       case HomeCollectionType.mostFavorite:
         return 'Most Favorite';
+      case HomeCollectionType.ongoing:
+        return 'Ongoing Anime';
+      case HomeCollectionType.completed:
+        return 'Completed';
+      case HomeCollectionType.movies:
+        return 'Movies';
     }
   }
 
@@ -64,6 +73,12 @@ extension HomeCollectionTypeX on HomeCollectionType {
         return 'Pilihan terbaik minggu ini';
       case HomeCollectionType.mostFavorite:
         return 'Serial dengan favorit terbanyak';
+      case HomeCollectionType.ongoing:
+        return 'Belum tamat';
+      case HomeCollectionType.completed:
+        return 'Sudah tamat';
+      case HomeCollectionType.movies:
+        return 'Film layar lebar';
     }
   }
 }
@@ -102,6 +117,8 @@ class AnimeProvider extends ChangeNotifier {
       homeTopAiring = [];
       homeMostPopular = [];
       homeMostFavorite = [];
+      searchResults = [];
+      allAnimes = [];
       homeSectionsError = null;
       errorMessage = null;
       notifyListeners();
@@ -243,7 +260,8 @@ class AnimeProvider extends ChangeNotifier {
       if (kDebugMode)
         print(
             '📡 fetchHomeSections: Redirecting to fetchHome() for Indo source');
-      return fetchHome();
+      await fetchHome();
+      return;
     }
 
     // Prevent concurrent calls
@@ -400,6 +418,12 @@ class AnimeProvider extends ChangeNotifier {
         return List<Anime>.from(homeMostPopular);
       case HomeCollectionType.mostFavorite:
         return List<Anime>.from(homeMostFavorite);
+      case HomeCollectionType.ongoing:
+        return List<Anime>.from(homeOngoing);
+      case HomeCollectionType.completed:
+        return List<Anime>.from(homeComplete);
+      case HomeCollectionType.movies:
+        return List<Anime>.from(homeMovie);
     }
   }
 
@@ -407,6 +431,70 @@ class AnimeProvider extends ChangeNotifier {
     HomeCollectionType type, {
     int page = 1,
   }) async {
+    if (!isHiAnime && _indoService != null) {
+      switch (type) {
+        case HomeCollectionType.ongoing:
+          return _indoService!.getOngoingPaginated(page);
+        case HomeCollectionType.completed:
+          return _indoService!.getCompletedPaginated(page);
+        case HomeCollectionType.movies:
+          if (page == 1) {
+            return {
+              'animes': homeMovie,
+              'pagination': {
+                'currentPage': 1,
+                'hasNextPage': false,
+                'totalPages': 1
+              }
+            };
+          }
+          return {
+            'animes': <Anime>[],
+            'pagination': {
+              'currentPage': page,
+              'hasNextPage': false,
+              'totalPages': page
+            },
+          };
+        default:
+          if (page > 1) {
+            return {
+              'animes': <Anime>[],
+              'pagination': {
+                'currentPage': page,
+                'hasNextPage': false,
+                'totalPages': page
+              },
+            };
+          }
+          return {
+            'animes': getHomeCollectionSnapshot(type),
+            'pagination': {
+              'currentPage': 1,
+              'hasNextPage': false,
+              'totalPages': 1
+            }
+          };
+      }
+    }
+
+    if (!isHiAnime) {
+      if (page > 1) {
+        return {
+          'animes': <Anime>[],
+          'pagination': {
+            'currentPage': page,
+            'hasNextPage': false,
+            'totalPages': 1
+          },
+        };
+      }
+      return {
+        'animes': getHomeCollectionSnapshot(type),
+        'pagination': {'currentPage': 1, 'hasNextPage': false, 'totalPages': 1}
+      };
+    }
+
     switch (type) {
       case HomeCollectionType.recentEpisodes:
         return _service.getRecentAnimeWithPagination(page: page);
@@ -418,6 +506,17 @@ class AnimeProvider extends ChangeNotifier {
         return _service.getMostPopularWithPagination(page: page);
       case HomeCollectionType.mostFavorite:
         return _service.getMostFavoriteWithPagination(page: page);
+      case HomeCollectionType.ongoing:
+      case HomeCollectionType.completed:
+      case HomeCollectionType.movies:
+        return {
+          'animes': <Anime>[],
+          'pagination': {
+            'currentPage': page,
+            'hasNextPage': false,
+            'totalPages': 1
+          },
+        };
     }
   }
 
@@ -512,10 +611,17 @@ class AnimeProvider extends ChangeNotifier {
         respCurrentPage = pagination['currentPage'] ?? page;
         respHasMorePages = pagination['hasNextPage'] ?? false;
         respTotalPages = pagination['totalPages'] ?? 1;
+      } else if (_indoService != null) {
+        final result = await _indoService!.search(query, page: page);
+        animes = result['animes'] as List<Anime>;
+        final pagination = result['pagination'] as Map<String, dynamic>;
+        respCurrentPage = pagination['currentPage'] ?? page;
+        respHasMorePages = pagination['hasNextPage'] ?? false;
+        respTotalPages = pagination['totalPages'] ?? 1;
       } else {
-        animes = await _indoService?.search(query) ?? [];
+        animes = [];
         respCurrentPage = page;
-        respHasMorePages = false; // Simple search for now
+        respHasMorePages = false;
         respTotalPages = 1;
       }
 
@@ -542,6 +648,15 @@ class AnimeProvider extends ChangeNotifier {
 
     isLoading = false;
     isLoadingMore = false;
+    notifyListeners();
+  }
+
+  void clearSearch() {
+    searchResults = [];
+    errorMessage = null;
+    currentPage = 1;
+    hasMorePages = true;
+    totalPages = 1;
     notifyListeners();
   }
 
@@ -580,14 +695,23 @@ class AnimeProvider extends ChangeNotifier {
               animes.where((a) => !existingIds.contains(a.id)).toList();
           ongoingAnimes.addAll(newAnimes);
         }
-      } else {
-        // For Indo sources, use home data if page 1, otherwise limited support
+      } else if (_indoService != null) {
+        final result = await _indoService!.getOngoingPaginated(page);
+        final animes = result['animes'] as List<Anime>;
+        final pagination = result['pagination'] as Map<String, dynamic>;
+
+        currentPage = pagination['currentPage'] ?? page;
+        hasMorePages = pagination['hasNextPage'] ?? false;
+        totalPages = pagination['totalPages'] ?? 1;
+
         if (page == 1) {
-          ongoingAnimes = homeOngoing;
+          ongoingAnimes = animes;
+        } else {
+          final existingIds = ongoingAnimes.map((a) => a.id).toSet();
+          final newAnimes =
+              animes.where((a) => !existingIds.contains(a.id)).toList();
+          ongoingAnimes.addAll(newAnimes);
         }
-        currentPage = 1;
-        hasMorePages = false;
-        totalPages = 1;
       }
 
       if (ongoingAnimes.isEmpty) {
@@ -638,13 +762,23 @@ class AnimeProvider extends ChangeNotifier {
               animes.where((a) => !existingIds.contains(a.id)).toList();
           completedAnimes.addAll(newAnimes);
         }
-      } else {
+      } else if (_indoService != null) {
+        final result = await _indoService!.getCompletedPaginated(page);
+        final animes = result['animes'] as List<Anime>;
+        final pagination = result['pagination'] as Map<String, dynamic>;
+
+        currentPage = pagination['currentPage'] ?? page;
+        hasMorePages = pagination['hasNextPage'] ?? false;
+        totalPages = pagination['totalPages'] ?? 1;
+
         if (page == 1) {
-          completedAnimes = homeComplete;
+          completedAnimes = animes;
+        } else {
+          final existingIds = completedAnimes.map((a) => a.id).toSet();
+          final newAnimes =
+              animes.where((a) => !existingIds.contains(a.id)).toList();
+          completedAnimes.addAll(newAnimes);
         }
-        currentPage = 1;
-        hasMorePages = false;
-        totalPages = 1;
       }
 
       if (completedAnimes.isEmpty) {
@@ -1030,16 +1164,21 @@ class AnimeProvider extends ChangeNotifier {
   }
 
   // ANIME DETAIL
-  Future<void> fetchAnimeDetail(String animeId) async {
+  Future<void> fetchAnimeDetail(String animeId,
+      {bool forceHiAnime = false}) async {
     isLoading = true;
     errorMessage = null;
     currentAnime = null;
     notifyListeners();
 
     try {
-      if (kDebugMode) print('🔍 PROVIDER: Fetching anime detail for $animeId');
+      if (kDebugMode)
+        print(
+            '🔍 PROVIDER: Fetching anime detail for $animeId (forceHiAnime=$forceHiAnime, isHiAnime=$isHiAnime)');
 
-      if (isHiAnime) {
+      final useHiAnime = forceHiAnime || isHiAnime;
+
+      if (useHiAnime) {
         currentAnime = await _service.getAnimeDetail(animeId);
       } else {
         currentAnime = await _indoService?.getDetail(animeId);
@@ -1055,7 +1194,7 @@ class AnimeProvider extends ChangeNotifier {
           print('   Episodes count: ${currentAnime!.episodes.length}');
         }
         // Automaticaly fetch characters for the detail screen (HiAnime only)
-        if (isHiAnime) {
+        if (useHiAnime) {
           fetchCharacters(animeId);
         }
       }
@@ -1278,6 +1417,86 @@ class AnimeProvider extends ChangeNotifier {
 
   bool isBookmarked(String animeId) {
     return bookmarkedAnimes.any((item) => item.id == animeId);
+  }
+
+  Future<void> fetchBrowseAnimes({
+    String? category,
+    String? genre,
+    String? type,
+    int page = 1,
+  }) async {
+    if (page == 1) {
+      isLoading = true;
+      allAnimes = []; // Using allAnimes as a general buffer for browse
+      currentPage = 1;
+      hasMorePages = true;
+      totalPages = 1;
+    } else {
+      isLoadingMore = true;
+    }
+
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      if (isHiAnime) {
+        if (genre != null && genre.isNotEmpty) {
+          final result = await _service.getAnimeByGenreWithPagination(
+            genre.toLowerCase().replaceAll(' ', '-'),
+            page: page,
+          );
+          _updateBrowseResults(result, page);
+        } else {
+          final result = await _service.filterAnimeWithPagination(
+            keyword: null,
+            genres: null,
+            type: type != 'all' ? type : null,
+            page: page,
+            category: category,
+          );
+          _updateBrowseResults(result, page);
+        }
+      } else if (_indoService != null) {
+        if (genre != null && genre.isNotEmpty) {
+          final result = await _indoService!.search(genre, page: page);
+          _updateBrowseResults(result, page);
+        } else {
+          Map<String, dynamic> result;
+          if (category == 'completed') {
+            result = await _indoService!.getCompletedPaginated(page);
+          } else {
+            result = await _indoService!.getOngoingPaginated(page);
+          }
+          _updateBrowseResults(result, page);
+        }
+      }
+    } catch (e) {
+      errorMessage = 'Error: $e';
+      if (kDebugMode) print('❌ Error in fetchBrowseAnimes: $e');
+    }
+
+    isLoading = false;
+    isLoadingMore = false;
+    notifyListeners();
+  }
+
+  void _updateBrowseResults(Map<String, dynamic> result, int page) {
+    final List<Anime> animes =
+        result['animes'] is List ? List<Anime>.from(result['animes']) : [];
+    final pagination = result['pagination'] as Map<String, dynamic>;
+
+    currentPage = pagination['currentPage'] ?? page;
+    hasMorePages = pagination['hasNextPage'] ?? false;
+    totalPages = pagination['totalPages'] ?? 1;
+
+    if (page == 1) {
+      allAnimes = animes;
+    } else {
+      final existingIds = allAnimes.map((a) => a.id).toSet();
+      final newAnimes =
+          animes.where((a) => !existingIds.contains(a.id)).toList();
+      allAnimes.addAll(newAnimes);
+    }
   }
 
   @override

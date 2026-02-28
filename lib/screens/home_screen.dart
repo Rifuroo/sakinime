@@ -223,22 +223,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                           title: '🔥 Ongoing Anime',
                                           subtitle: 'Recently aired episodes',
                                           data: provider.homeOngoing,
-                                          type:
-                                              HomeCollectionType.recentEpisodes,
+                                          type: HomeCollectionType.ongoing,
                                         ),
                                       if (provider.homeComplete.isNotEmpty)
                                         _buildSection(
                                           title: '✅ Completed',
                                           subtitle: 'Finished series',
                                           data: provider.homeComplete,
-                                          type: HomeCollectionType.recentAdded,
+                                          type: HomeCollectionType.completed,
                                         ),
                                       if (provider.homeMovie.isNotEmpty)
                                         _buildSection(
                                           title: '🎬 Movies',
                                           subtitle: 'Anime feature films',
                                           data: provider.homeMovie,
-                                          type: HomeCollectionType.recentAdded,
+                                          type: HomeCollectionType.movies,
                                         ),
                                     ],
                                   ],

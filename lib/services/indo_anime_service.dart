@@ -73,11 +73,12 @@ class IndoAnimeService {
     return null;
   }
 
-  Future<List<Anime>> search(String query) async {
+  Future<Map<String, dynamic>> search(String query, {int page = 1}) async {
     try {
-      final path = source == AnimeSource.otakudesu ? 'search' : 'anime';
-      final params =
-          source == AnimeSource.otakudesu ? {'q': query} : {'search': query};
+      final String path = source == AnimeSource.otakudesu ? 'search' : 'anime';
+      final Map<String, dynamic> params = source == AnimeSource.otakudesu
+          ? {'query': query}
+          : {'search': query, 'page': page};
 
       final response = await _dio.get(path, queryParameters: params);
       final isSuccess = response.data['success'] == true ||
@@ -85,17 +86,39 @@ class IndoAnimeService {
 
       if (response.statusCode == 200 && isSuccess) {
         final data = response.data['data'];
-        final List? rawList = data['animeList'] ?? data['animes'];
-        if (rawList != null) {
-          return rawList
-              .map((e) => Anime.fromJson(Map<String, dynamic>.from(e)))
-              .toList();
-        }
+        final List? rawList = (data is List)
+            ? data
+            : (data is Map
+                ? (data['animeList'] ?? data['episodeList'] ?? data['animes'])
+                : null);
+
+        final animes = rawList != null
+            ? rawList
+                .map((e) => Anime.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+            : <Anime>[];
+
+        // Extract pagination if available, otherwise use a heuristic
+        final paginationData = response.data['pagination'];
+        final pagination = {
+          'currentPage': paginationData?['currentPage'] ?? page,
+          'hasNextPage':
+              paginationData?['hasNextPage'] ?? (animes.length >= 10),
+          'totalPages': paginationData?['totalPages'] ?? (page + 1),
+        };
+
+        return {
+          'animes': animes,
+          'pagination': pagination,
+        };
       }
     } catch (e) {
       if (kDebugMode) print('❌ IndoAnimeService.search Error: $e');
     }
-    return [];
+    return {
+      'animes': <Anime>[],
+      'pagination': {'currentPage': page, 'hasNextPage': false}
+    };
   }
 
   Future<AnimeDetail?> getDetail(String id) async {
@@ -110,10 +133,20 @@ class IndoAnimeService {
         final data = response.data['data'];
         if (data is Map && data['details'] != null) {
           // Kuramanime format
-          return AnimeDetail.fromJson(
-              Map<String, dynamic>.from(data['details']));
+          final details = data['details'];
+          if (details['title']?.toString().trim().isEmpty ?? true) {
+            if (kDebugMode)
+              print('❌ IndoAnimeService.getDetail Error: Received empty title');
+            return null;
+          }
+          return AnimeDetail.fromJson(Map<String, dynamic>.from(details));
         } else if (data is Map) {
           // OtakuDesu format (direct data or nested in data)
+          if (data['title']?.toString().trim().isEmpty ?? true) {
+            if (kDebugMode)
+              print('❌ IndoAnimeService.getDetail Error: Received empty title');
+            return null;
+          }
           return AnimeDetail.fromJson(Map<String, dynamic>.from(data));
         }
       }
@@ -121,6 +154,103 @@ class IndoAnimeService {
       if (kDebugMode) print('❌ IndoAnimeService.getDetail Error: $e');
     }
     return null;
+  }
+
+  Future<Map<String, dynamic>> getOngoingPaginated(int page) async {
+    try {
+      final String path;
+      final Map<String, dynamic> params = {'page': page};
+
+      if (source == AnimeSource.otakudesu) {
+        path = 'ongoing';
+      } else {
+        path = 'anime';
+        params['status'] = 'ongoing';
+      }
+
+      final response = await _dio.get(path, queryParameters: params);
+      final isSuccess = response.data['success'] == true ||
+          response.data['statusCode'] == 200;
+
+      if (response.statusCode == 200 && isSuccess) {
+        final data = response.data['data'];
+        final List? rawList = (data is Map) ? data['animeList'] : data;
+
+        if (rawList != null) {
+          final animes = rawList
+              .map((e) => Anime.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+
+          return {
+            'animes': animes,
+            'pagination': {
+              'currentPage': page,
+              'hasNextPage': animes.length >= 10, // Simple heuristic for Indo
+              'totalPages': page + 1,
+            },
+          };
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('❌ IndoAnimeService.getOngoingPaginated Error: $e');
+    }
+    return {
+      'animes': <Anime>[],
+      'pagination': {
+        'currentPage': page,
+        'hasNextPage': false,
+        'totalPages': page
+      },
+    };
+  }
+
+  Future<Map<String, dynamic>> getCompletedPaginated(int page) async {
+    try {
+      final String path;
+      final Map<String, dynamic> params = {'page': page};
+
+      if (source == AnimeSource.otakudesu) {
+        path = 'completed';
+      } else {
+        path = 'anime';
+        params['status'] = 'completed';
+      }
+
+      final response = await _dio.get(path, queryParameters: params);
+      final isSuccess = response.data['success'] == true ||
+          response.data['statusCode'] == 200;
+
+      if (response.statusCode == 200 && isSuccess) {
+        final data = response.data['data'];
+        final List? rawList = (data is Map) ? data['animeList'] : data;
+
+        if (rawList != null) {
+          final animes = rawList
+              .map((e) => Anime.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+
+          return {
+            'animes': animes,
+            'pagination': {
+              'currentPage': page,
+              'hasNextPage': animes.length >= 10, // Simple heuristic for Indo
+              'totalPages': page + 1,
+            },
+          };
+        }
+      }
+    } catch (e) {
+      if (kDebugMode)
+        print('❌ IndoAnimeService.getCompletedPaginated Error: $e');
+    }
+    return {
+      'animes': <Anime>[],
+      'pagination': {
+        'currentPage': page,
+        'hasNextPage': false,
+        'totalPages': page
+      },
+    };
   }
 
   Future<List<StreamLink>> getStreamLinks(String episodeId) async {

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'dart:async';
 import '../models/anime_model.dart';
 import '../widgets/anime_card.dart';
 import '../constants/app_colors.dart';
+import '../providers/anime_provider.dart';
 import 'detail_anime_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -17,41 +17,86 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  
+
   Timer? _debounce;
   bool _isLoading = false;
   bool _isLoadingMore = false;
   List<Anime> _results = [];
   int _currentPage = 1;
   bool _hasNextPage = false;
-  
+
   // Filters
   String? _selectedGenre;
   String _selectedType = 'all';
   bool _showFilters = false;
-  
+
   // Animation
   late AnimationController _filterAnimationController;
   late Animation<double> _filterAnimation;
-  
+
   static const List<String> genres = [
-    'Action', 'Adventure', 'Cars', 'Comedy', 'Dementia', 'Demons', 'Mystery', 'Drama', 'Ecchi',
-    'Fantasy', 'Game', 'Historical', 'Horror', 'Kids', 'Magic', 'Martial Arts', 'Mecha', 'Music',
-    'Parody', 'Samurai', 'Romance', 'School', 'Sci-Fi', 'Shoujo', 'Shoujo Ai', 'Shounen',
-    'Shounen Ai', 'Space', 'Sports', 'Super Power', 'Vampire', 'Harem', 'Slice of Life',
-    'Supernatural', 'Military', 'Police', 'Psychological', 'Thriller', 'Seinen', 'Josei', 'Isekai'
+    'Action',
+    'Adventure',
+    'Cars',
+    'Comedy',
+    'Dementia',
+    'Demons',
+    'Mystery',
+    'Drama',
+    'Ecchi',
+    'Fantasy',
+    'Game',
+    'Historical',
+    'Horror',
+    'Kids',
+    'Magic',
+    'Martial Arts',
+    'Mecha',
+    'Music',
+    'Parody',
+    'Samurai',
+    'Romance',
+    'School',
+    'Sci-Fi',
+    'Shoujo',
+    'Shoujo Ai',
+    'Shounen',
+    'Shounen Ai',
+    'Space',
+    'Sports',
+    'Super Power',
+    'Vampire',
+    'Harem',
+    'Slice of Life',
+    'Supernatural',
+    'Military',
+    'Police',
+    'Psychological',
+    'Thriller',
+    'Seinen',
+    'Josei',
+    'Isekai'
   ];
-  
-  static const List<String> types = ['all', 'movie', 'tv', 'ova', 'special', 'music', 'ona'];
+
+  static const List<String> types = [
+    'all',
+    'movie',
+    'tv',
+    'ova',
+    'special',
+    'music',
+    'ona'
+  ];
 
   @override
   void initState() {
     super.initState();
-    
+
     // Filter animation
     _filterAnimationController = AnimationController(
       vsync: this,
@@ -61,15 +106,15 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       parent: _filterAnimationController,
       curve: Curves.easeInOut,
     );
-    
+
     // Scroll listener for pagination
     _scrollController.addListener(_onScroll);
-    
+
     // Auto-focus search
     Future.delayed(const Duration(milliseconds: 150), () {
       _focusNode.requestFocus();
     });
-    
+
     // Initial genre if provided
     if (widget.initialGenre != null) {
       _selectedGenre = widget.initialGenre;
@@ -89,7 +134,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       if (!_isLoadingMore && _hasNextPage) {
         _performSearch(_searchController.text, _currentPage + 1, isMore: true);
       }
@@ -99,25 +145,30 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   void _onSearchChanged(String query) {
     // Cancel previous debounce
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    
+
     // Clear results if empty
     if (query.trim().isEmpty) {
+      final animeProvider = Provider.of<AnimeProvider>(context, listen: false);
+      animeProvider.clearSearch();
       setState(() {
         _results = [];
         _hasNextPage = false;
       });
       return;
     }
-    
+
     // Debounce search (500ms)
     _debounce = Timer(const Duration(milliseconds: 500), () {
       _performSearch(query, 1);
     });
   }
 
-  Future<void> _performSearch(String query, int page, {bool isMore = false}) async {
+  Future<void> _performSearch(String query, int page,
+      {bool isMore = false}) async {
     if (query.trim().isEmpty) return;
-    
+
+    final animeProvider = Provider.of<AnimeProvider>(context, listen: false);
+
     setState(() {
       if (isMore) {
         _isLoadingMore = true;
@@ -127,33 +178,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     });
 
     try {
-      final keyword = query.trim().replaceAll(' ', '+');
-      final url = 'https://hianime-api-seven-steel.vercel.app/api/v1/search?keyword=$keyword&page=$page';
-      
-      final response = await http.get(Uri.parse(url));
-      
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        
-        if (json['success'] == true && json['data'] != null) {
-          final List<dynamic> animeData = json['data']['response'] ?? [];
-          final List<Anime> newResults = animeData
-              .map((item) => _mapAnimeCard(item))
-              .where((anime) => anime != null)
-              .cast<Anime>()
-              .toList();
-          
-          setState(() {
-            if (isMore) {
-              _results.addAll(newResults);
-            } else {
-              _results = newResults;
-            }
-            _hasNextPage = json['data']['pageInfo']?['hasNextPage'] ?? false;
-            _currentPage = page;
-          });
+      await animeProvider.searchAnimes(query, page: page);
+
+      setState(() {
+        if (isMore) {
+          _results = List.from(animeProvider.searchResults);
+        } else {
+          _results = animeProvider.searchResults;
         }
-      }
+        _hasNextPage = animeProvider.hasMorePages;
+        _currentPage = animeProvider.currentPage;
+      });
     } catch (e) {
       debugPrint('Search error: $e');
     } finally {
@@ -161,21 +196,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         _isLoading = false;
         _isLoadingMore = false;
       });
-    }
-  }
-
-  Anime? _mapAnimeCard(Map<String, dynamic> item) {
-    try {
-      return Anime(
-        id: item['id'] ?? '',
-        title: item['name'] ?? item['title'] ?? 'Unknown',
-        poster: item['poster'] ?? '',
-        rating: item['rating']?.toString(),
-        type: item['type'],
-        status: item['status'],
-      );
-    } catch (e) {
-      return null;
     }
   }
 
@@ -190,6 +210,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
   void _clearSearch() {
     _searchController.clear();
+    final animeProvider = Provider.of<AnimeProvider>(context, listen: false);
+    animeProvider.clearSearch();
     setState(() {
       _results = [];
       _hasNextPage = false;
@@ -208,10 +230,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                   constraints: const BoxConstraints(maxWidth: 1200),
-                   child: _isLoading
-                      ? _buildLoadingState()
-                      : _buildResultsGrid(),
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child:
+                      _isLoading ? _buildLoadingState() : _buildResultsGrid(),
                 ),
               ),
             ),
@@ -250,7 +271,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Search bar
           Expanded(
             child: Container(
@@ -307,7 +328,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Filter toggle
           GestureDetector(
             onTap: _toggleFilters,
@@ -366,24 +387,28 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 itemBuilder: (context, index) {
                   final genre = genres[index];
                   final isSelected = _selectedGenre == genre;
-                  
+
                   return GestureDetector(
                     onTap: () => setState(() => _selectedGenre = genre),
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.cardBg,
+                        color:
+                            isSelected ? AppColors.primary : AppColors.cardBg,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? AppColors.primary : AppColors.border,
+                          color:
+                              isSelected ? AppColors.primary : AppColors.border,
                           width: 1,
                         ),
                       ),
                       child: Text(
                         genre,
                         style: GoogleFonts.inter(
-                          color: isSelected ? Colors.black : AppColors.textMuted,
+                          color:
+                              isSelected ? Colors.black : AppColors.textMuted,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -412,24 +437,28 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 itemBuilder: (context, index) {
                   final type = types[index];
                   final isSelected = _selectedType == type;
-                  
+
                   return GestureDetector(
                     onTap: () => setState(() => _selectedType = type),
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.cardBg,
+                        color:
+                            isSelected ? AppColors.primary : AppColors.cardBg,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? AppColors.primary : AppColors.border,
+                          color:
+                              isSelected ? AppColors.primary : AppColors.border,
                           width: 1,
                         ),
                       ),
                       child: Text(
                         type.toUpperCase(),
                         style: GoogleFonts.inter(
-                          color: isSelected ? Colors.black : AppColors.textMuted,
+                          color:
+                              isSelected ? Colors.black : AppColors.textMuted,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -522,10 +551,15 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         return AnimeCard(
           anime: anime,
           onTap: () {
+            final animeProvider =
+                Provider.of<AnimeProvider>(context, listen: false);
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => DetailAnimeScreen(animeId: anime.id),
+                builder: (context) => DetailAnimeScreen(
+                  animeId: anime.id,
+                  forceHiAnime: animeProvider.isHiAnime,
+                ),
               ),
             );
           },
