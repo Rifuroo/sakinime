@@ -679,8 +679,16 @@ class IndoAnimeService {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
     };
 
-    if (url.contains('blogger.com')) {
+    if (url.contains('blogger.com') || url.contains('googlevideo.com')) {
       headers['Referer'] = 'https://desustream.info/';
+    } else if (url.contains('vidhide') ||
+        url.contains('odvidhide') ||
+        url.contains('acek-cdn.com')) {
+      headers['Referer'] = 'https://odvidhide.com/';
+      headers['Origin'] = 'https://odvidhide.com';
+    } else if (url.contains('filedon') ||
+        url.contains('r2.cloudflarestorage.com')) {
+      headers['Referer'] = 'https://filedon.co/';
     } else if (url.contains('otakudesu')) {
       headers['Referer'] = 'https://otakudesu.best/';
     } else if (url.contains('kuramanime')) {

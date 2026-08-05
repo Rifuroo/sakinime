@@ -12,6 +12,7 @@ class StreamLink {
   final String? format;
   final String? note;
   final Map<String, String>? headers;
+  final List<SubtitleTrack>? tracks; // ✅ Added subtitle tracks
 
   StreamLink({
     required this.provider,
@@ -24,9 +25,17 @@ class StreamLink {
     this.format,
     this.note,
     this.headers,
+    this.tracks,
   });
 
   factory StreamLink.fromJson(Map<String, dynamic> json) {
+    List<SubtitleTrack>? parsedTracks;
+    if (json['tracks'] is List) {
+      parsedTracks = (json['tracks'] as List)
+          .map((t) => SubtitleTrack.fromJson(Map<String, dynamic>.from(t)))
+          .toList();
+    }
+
     return StreamLink(
       provider: json['provider'] ?? json['server'] ?? json['name'] ?? 'Unknown',
       url: json['url'] ?? json['link'] ?? '',
@@ -40,6 +49,7 @@ class StreamLink {
       headers: json['headers'] != null
           ? Map<String, String>.from(json['headers'])
           : null,
+      tracks: parsedTracks,
     );
   }
 
@@ -77,6 +87,39 @@ class StreamLink {
       'format': format,
       'note': note,
       'headers': headers,
+      if (tracks != null) 'tracks': tracks!.map((t) => t.toJson()).toList(),
+    };
+  }
+}
+
+class SubtitleTrack {
+  final String file;
+  final String label;
+  final String kind;
+  final bool? defaultTrack;
+
+  SubtitleTrack({
+    required this.file,
+    required this.label,
+    required this.kind,
+    this.defaultTrack,
+  });
+
+  factory SubtitleTrack.fromJson(Map<String, dynamic> json) {
+    return SubtitleTrack(
+      file: json['file'] ?? '',
+      label: json['label'] ?? 'Unknown',
+      kind: json['kind'] ?? 'captions',
+      defaultTrack: json['default'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'file': file,
+      'label': label,
+      'kind': kind,
+      if (defaultTrack != null) 'default': defaultTrack,
     };
   }
 }

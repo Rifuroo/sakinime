@@ -911,6 +911,7 @@ class AnimeService {
             'type': link['type']?.toString() ?? 'hls',
             'quality': 'auto',
             'source': 'hianime',
+            if (streamData['tracks'] != null) 'tracks': streamData['tracks'],
           }));
         }
       }

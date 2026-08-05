@@ -1224,7 +1224,27 @@ class AnimeProvider extends ChangeNotifier {
           currentEpisodeData = episodeData;
 
           // ✅ Extract streaming links from episode data
-          if (episodeData['resolved_links'] != null) {
+          if (episodeData['link'] is Map) {
+            final link = episodeData['link'];
+            final videoUrl = link['proxyUrl']?.toString() ??
+                link['file']?.toString() ??
+                link['directUrl']?.toString() ??
+                '';
+
+            if (videoUrl.isNotEmpty) {
+              currentStreamLinks = [
+                StreamLink.fromJson({
+                  'provider': 'HiAnime ${episodeData['server'] ?? 'HD-2'}',
+                  'url': videoUrl,
+                  'type': link['type']?.toString() ?? 'hls',
+                  'quality': 'auto',
+                  'source': 'hianime',
+                  if (episodeData['tracks'] != null)
+                    'tracks': episodeData['tracks'],
+                })
+              ];
+            }
+          } else if (episodeData['resolved_links'] != null) {
             final links = episodeData['resolved_links'] as List;
             currentStreamLinks =
                 links.map((l) => StreamLink.fromJson(l)).toList();

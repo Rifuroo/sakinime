@@ -588,10 +588,36 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
 
       final qualities = animeProvider.currentStreamLinks;
 
-      // Parse subtitles if available (HiAnime specific or common field)
+      // Select default quality
+      StreamLink? initialQuality;
+      if (qualities.isNotEmpty) {
+        // 1. Priority: Main/Default player (already resolved in many cases)
+        initialQuality = qualities.firstWhere(
+          (q) =>
+              q.provider.toLowerCase().contains('main') ||
+              q.quality == 'Default',
+          orElse: () => qualities.firstWhere(
+            (q) => q.quality?.contains('360') == true,
+            orElse: () => qualities.first,
+          ),
+        );
+      }
+
+      // Parse subtitles if available from the selected stream link
       final List<Map<String, String>> availableSubs = [];
-      if (animeProvider.currentEpisodeData != null &&
+      if (initialQuality != null && initialQuality.tracks != null) {
+        for (var track in initialQuality.tracks!) {
+          if (track.kind == 'captions') {
+            availableSubs.add({
+              'url': track.file,
+              'lang': track.label,
+              'label': track.label,
+            });
+          }
+        }
+      } else if (animeProvider.currentEpisodeData != null &&
           animeProvider.currentEpisodeData!['subtitles'] is List) {
+        // Fallback to legacy structure if present
         final subtitles =
             animeProvider.currentEpisodeData!['subtitles'] as List;
         for (var sub in subtitles) {
@@ -610,21 +636,6 @@ class _AnimeVideoPlayerState extends State<AnimeVideoPlayer>
       }
 
       if (mounted) {
-        // Select default quality
-        StreamLink? initialQuality;
-        if (qualities.isNotEmpty) {
-          // 1. Priority: Main/Default player (already resolved in many cases)
-          initialQuality = qualities.firstWhere(
-            (q) =>
-                q.provider.toLowerCase().contains('main') ||
-                q.quality == 'Default',
-            orElse: () => qualities.firstWhere(
-              (q) => q.quality?.contains('360') == true,
-              orElse: () => qualities.first,
-            ),
-          );
-        }
-
         setState(() {
           _allAvailableQualities = qualities;
           _availableSubtitles = availableSubs;
